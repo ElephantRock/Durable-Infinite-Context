@@ -84,7 +84,7 @@ class ScalablePlannerTests(unittest.TestCase):
         store.add_assertion(Assertion("a2", "s2", "deadline", 10, 2, evidence_ids=("e2",)))
 
         index = SubjectProfileIndex(store)
-        self.assertEqual(index.ngram_posting("alph", "deadline"), ("s1", "s2"))
+        self.assertEqual(index.ngram_posting("alph", "deadline"), frozenset({"s1", "s2"}))
         plan = ScalableQueryPlanner(index).plan("What is alphp's due date?")
         self.assertIsNone(plan.subject_id)
         self.assertEqual(set(plan.ambiguous_subject_ids), {"s1", "s2"})
