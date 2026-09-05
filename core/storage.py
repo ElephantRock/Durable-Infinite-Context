@@ -18,8 +18,8 @@ class MemoryStore:
     _assertions_by_subject: dict[str, set[str]] = field(
         default_factory=lambda: defaultdict(set), repr=False
     )
-    _evidence_subject_refcounts: dict[tuple[str, str], int] = field(
-        default_factory=lambda: defaultdict(int), repr=False
+    _evidence_subject_refcounts: dict[str, dict[str, int]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(int)), repr=False
     )
     _relations_by_source: dict[str, list[AssertionRelation]] = field(
         default_factory=lambda: defaultdict(list), repr=False
@@ -47,18 +47,22 @@ class MemoryStore:
                 self._assertions_by_subject.pop(item.subject_id, None)
 
         for evidence_id in item.evidence_ids:
-            ref_key = (evidence_id, item.subject_id)
-            count = self._evidence_subject_refcounts.get(ref_key, 0)
+            subject_counts = self._evidence_subject_refcounts.get(evidence_id)
+            if subject_counts is None:
+                continue
+            count = subject_counts.get(item.subject_id, 0)
             if count <= 1:
-                self._evidence_subject_refcounts.pop(ref_key, None)
+                subject_counts.pop(item.subject_id, None)
             else:
-                self._evidence_subject_refcounts[ref_key] = count - 1
+                subject_counts[item.subject_id] = count - 1
+            if not subject_counts:
+                self._evidence_subject_refcounts.pop(evidence_id, None)
 
     def _add_assertion_indexes(self, item: Assertion) -> None:
         self._assertions_by_key[item.key].add(item.id)
         self._assertions_by_subject[item.subject_id].add(item.id)
         for evidence_id in item.evidence_ids:
-            self._evidence_subject_refcounts[(evidence_id, item.subject_id)] += 1
+            self._evidence_subject_refcounts[evidence_id][item.subject_id] += 1
 
     def add_assertion(self, item: Assertion) -> None:
         # Treat assertion IDs as stable logical addresses. Replacement updates all
@@ -95,12 +99,9 @@ class MemoryStore:
         return tuple(sorted(self._assertions_by_subject))
 
     def subjects_for_evidence(self, evidence_id: str) -> tuple[str, ...]:
-        subjects = {
-            subject_id
-            for (eid, subject_id), count in self._evidence_subject_refcounts.items()
-            if eid == evidence_id and count > 0
-        }
-        return tuple(sorted(subjects))
+        # Direct dependency lookup: cost is proportional to the evidence item's
+        # actual fan-out, not total assertion/evidence cardinality.
+        return tuple(sorted(self._evidence_subject_refcounts.get(evidence_id, {})))
 
     def relations_from(self, assertion_id: str) -> list[AssertionRelation]:
         return list(self._relations_by_source.get(assertion_id, []))
