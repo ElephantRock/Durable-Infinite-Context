@@ -20,3 +20,4 @@ jobs:
       - run: python run_planner_experiment.py
       - run: python run_scalable_planner_experiment.py
       - run: python run_maintenance_experiment.py
+      - run: python run_cascade_experiment.py
