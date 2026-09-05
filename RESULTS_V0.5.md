@@ -106,6 +106,22 @@ This supports the intended operational property:
 
 for the controlled fixed-complexity workloads.
 
+## Review hardening
+
+Automated review identified three correctness risks that were not exercised by the original cardinality benchmark:
+
+1. one evidence record referenced by multiple assertions for the same subject could be counted repeatedly and inflate term frequency;
+2. one subject could appear more than once in an n-gram posting when several profile tokens shared the same gram;
+3. the broad-posting cutoff was initially applied globally before the requested predicate could narrow the posting.
+
+The implementation was hardened by:
+
+- building profiles from unique `(subject_id, evidence_id)` pairs;
+- storing unique subject IDs per token/fragment/n-gram posting;
+- materializing predicate-specific postings so predicate eligibility is applied before broadness checks without a query-time full posting scan.
+
+Three targeted regression tests were added. The complete suite now passes 29/29 tests. The v0.4 regression benchmark and the full 50,000-entity v0.5 sweep also remain green, with the reported v0.5 cost numbers unchanged.
+
 ## Important negative result: small-N overhead
 
 At only 100 entities, indexed/fuzzy resolution can cost more logical operations than a direct full-profile scan:
