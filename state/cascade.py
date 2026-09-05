@@ -126,22 +126,6 @@ class CascadeMaterialization:
             list(cell.supporting_assertion_ids) + list(cell.competing_assertion_ids)
         ))
 
-    def _support_dependencies(self, key: StateKey, trace: DependencyTrace | None = None) -> set[str]:
-        dependencies = {state_node(key)}
-        cell = self.store.state.get(key)
-        if trace is not None:
-            trace.materialization_reads += 1
-        for assertion_id in self._active_assertion_ids(cell):
-            assertion = self.store.assertions.get(assertion_id)
-            if assertion is None:
-                continue
-            if trace is not None:
-                trace.assertion_reads += 1
-            dependencies.add(assertion_node(assertion.id))
-            for eid in assertion.evidence_ids:
-                dependencies.add(evidence_node(eid))
-        return dependencies
-
     def ensure_profile(self, subject_id: str) -> str:
         node_id = profile_node(subject_id)
         self._subject_by_profile_node[node_id] = subject_id
@@ -186,10 +170,13 @@ class CascadeMaterialization:
             self.ensure_profile(subject_id)
 
         for key in self._all_keys():
-            self.ensure_state_chain(key)
+            s_node, u_node, c_node = self.ensure_state_chain(key)
             self._rebuild_state(key, self.build_trace)
+            self.graph.mark_fresh(s_node)
             self._rebuild_support(key, self.build_trace)
+            self.graph.mark_fresh(u_node)
             self._rebuild_context(key, self.build_trace)
+            self.graph.mark_fresh(c_node)
 
     def _rebuild_state(self, key: StateKey, trace: DependencyTrace) -> None:
         assertions = self.store.assertions_for_key(key)
@@ -326,8 +313,8 @@ class CascadeMaterialization:
     def read_context(self, key: StateKey) -> str | None:
         node_id = context_node(key)
         status = self.graph.status_of(node_id)
-        if status == DerivationStatus.INVALID:
-            raise RuntimeError(f"Context materialization is invalid: {node_id}")
+        if status is not None and status != DerivationStatus.FRESH:
+            raise RuntimeError(f"Context materialization is not fresh: {node_id} ({status.value})")
         return self.contexts.get(key)
 
     @staticmethod
