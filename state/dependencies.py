@@ -23,6 +23,7 @@ class DependencyTrace:
     relation_reads: int = 0
     evidence_reads: int = 0
     profile_work: int = 0
+    materialization_reads: int = 0
     materialization_writes: int = 0
 
     @property
@@ -38,6 +39,7 @@ class DependencyTrace:
             + self.relation_reads
             + self.evidence_reads
             + self.profile_work
+            + self.materialization_reads
             + self.materialization_writes
         )
 
@@ -52,6 +54,7 @@ class DependencyTrace:
         self.relation_reads += other.relation_reads
         self.evidence_reads += other.evidence_reads
         self.profile_work += other.profile_work
+        self.materialization_reads += other.materialization_reads
         self.materialization_writes += other.materialization_writes
 
 
