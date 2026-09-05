@@ -50,10 +50,7 @@ def apply_incremental_current_state(
     cost.relation_reads += len(outgoing)
 
     if old is None:
-        if schema.cardinality == "multi":
-            cell = StateCell(key, [assertion.object_value], StateStatus.RESOLVED, [assertion.id])
-        else:
-            cell = StateCell(key, [assertion.object_value], StateStatus.RESOLVED, [assertion.id])
+        cell = StateCell(key, [assertion.object_value], StateStatus.RESOLVED, [assertion.id])
         store.state[key] = cell
         cost.state_writes += 1
         return cost
@@ -73,9 +70,19 @@ def apply_incremental_current_state(
         cost.state_writes += 1
         return cost
 
-    replacement = next((r for r in outgoing if r.relation in {RelationType.CORRECTS, RelationType.SUPERSEDES}), None)
+    replacement_relations = [
+        r for r in outgoing
+        if r.relation in {RelationType.CORRECTS, RelationType.SUPERSEDES}
+    ]
+    replacement_targets = {r.target_assertion_id for r in replacement_relations}
     active_ids = set(old.supporting_assertion_ids) | set(old.competing_assertion_ids)
-    if replacement is not None and replacement.target_assertion_id in active_ids:
+
+    # A correction/supersession may resolve the cell in O(1) only when it
+    # explicitly defeats every currently active assertion. If it targets only
+    # one member of a contested (or multiply-supported) state, the remaining
+    # active assertions must survive and full reconciliation determines whether
+    # the result is still contested.
+    if active_ids and active_ids.issubset(replacement_targets):
         historical = list(dict.fromkeys(
             list(old.historical_assertion_ids)
             + list(old.supporting_assertion_ids)
@@ -105,7 +112,7 @@ def apply_incremental_current_state(
         cost.state_writes += 1
         return cost
 
-    if old.status == StateStatus.RESOLVED and old.operative_values != [assertion.object_value] and not replacement:
+    if old.status == StateStatus.RESOLVED and old.operative_values != [assertion.object_value] and not replacement_relations:
         competing = list(old.supporting_assertion_ids) + [assertion.id]
         store.state[key] = StateCell(
             key,
@@ -118,7 +125,8 @@ def apply_incremental_current_state(
         cost.state_writes += 1
         return cost
 
-    # Complex contested updates use the correctness-preserving slow path.
+    # Complex contested or partially-targeted replacement updates use the
+    # correctness-preserving slow path.
     assertions = store.assertions_for_key(key)
     rels = store.relations_for_assertions({a.id for a in assertions})
     cost.assertion_reads += len(assertions)
