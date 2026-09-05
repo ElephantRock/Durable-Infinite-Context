@@ -1,10 +1,11 @@
 {
   "experiment": "v0.6_incremental_addressability_maintenance",
-  "source": "GitHub Actions run 33997138939",
+  "source": "GitHub Actions run 33997463513",
   "cardinalities": [100, 1000, 10000, 50000],
   "all_materializations_equal": true,
   "all_semantic_checks_passed": true,
-  "unit_tests": {"passed": 35, "failed": 0},
+  "review_hardening": true,
+  "unit_tests": {"passed": 38, "failed": 0},
   "rows": [
     {"entity_count":100,"operation":"insert_subject","affected_subjects":1,"incremental_work":88,"rebuild_work":8666,"work_fraction_vs_rebuild":0.010154627279021463},
     {"entity_count":100,"operation":"replace_evidence_payload","affected_subjects":1,"incremental_work":36,"rebuild_work":8664,"work_fraction_vs_rebuild":0.004155124653739612},
