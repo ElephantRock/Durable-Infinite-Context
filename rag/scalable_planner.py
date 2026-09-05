@@ -100,9 +100,8 @@ class SubjectProfileIndex:
     lexical addressability state and can be regenerated from ``MemoryStore``.
 
     v0.6 changes the physical representation from immutable posting tuples to mutable
-    unique-subject sets. Query ranking remains deterministic because final candidates
-    are explicitly sorted by score/subject ID, while update cost no longer requires
-    rebuilding a long posting just to add or remove one subject.
+    unique-subject sets. Update cost no longer requires rebuilding a long posting just
+    to add or remove one subject.
 
     IDF is computed lazily from current posting cardinality. Eagerly rewriting every
     token's IDF after total-subject cardinality changes would turn a local insertion or
@@ -295,20 +294,40 @@ class SubjectProfileIndex:
             and dict(self.ngram_predicate_postings) == dict(other.ngram_predicate_postings)
         )
 
-    def token_posting(self, token: str, predicate: Optional[str]) -> frozenset[str]:
+    def _token_set(self, token: str, predicate: Optional[str]) -> set[str]:
         if predicate is None:
-            return frozenset(self.token_postings.get(token, set()))
-        return frozenset(self.token_predicate_postings.get((token, predicate), set()))
+            return self.token_postings.get(token, set())
+        return self.token_predicate_postings.get((token, predicate), set())
+
+    def _fragment_set(self, fragment: str, predicate: Optional[str]) -> set[str]:
+        if predicate is None:
+            return self.fragment_postings.get(fragment, set())
+        return self.fragment_predicate_postings.get((fragment, predicate), set())
+
+    def _ngram_set(self, gram: str, predicate: Optional[str]) -> set[str]:
+        if predicate is None:
+            return self.ngram_postings.get(gram, set())
+        return self.ngram_predicate_postings.get((gram, predicate), set())
+
+    # Cardinality access is O(1) on the mutable backing set. The planner checks this
+    # before materializing an immutable posting, so broad postings are never copied.
+    def token_posting_size(self, token: str, predicate: Optional[str]) -> int:
+        return len(self._token_set(token, predicate))
+
+    def fragment_posting_size(self, fragment: str, predicate: Optional[str]) -> int:
+        return len(self._fragment_set(fragment, predicate))
+
+    def ngram_posting_size(self, gram: str, predicate: Optional[str]) -> int:
+        return len(self._ngram_set(gram, predicate))
+
+    def token_posting(self, token: str, predicate: Optional[str]) -> frozenset[str]:
+        return frozenset(self._token_set(token, predicate))
 
     def fragment_posting(self, fragment: str, predicate: Optional[str]) -> frozenset[str]:
-        if predicate is None:
-            return frozenset(self.fragment_postings.get(fragment, set()))
-        return frozenset(self.fragment_predicate_postings.get((fragment, predicate), set()))
+        return frozenset(self._fragment_set(fragment, predicate))
 
     def ngram_posting(self, gram: str, predicate: Optional[str]) -> frozenset[str]:
-        if predicate is None:
-            return frozenset(self.ngram_postings.get(gram, set()))
-        return frozenset(self.ngram_predicate_postings.get((gram, predicate), set()))
+        return frozenset(self._ngram_set(gram, predicate))
 
 
 class ScalableQueryPlanner:
@@ -379,39 +398,42 @@ class ScalableQueryPlanner:
         missing_tokens: list[str] = []
         for token in q_tokens:
             token_lookups += 1
-            posting = self.index.token_posting(token, predicate)
-            if not posting:
+            posting_size = self.index.token_posting_size(token, predicate)
+            if posting_size == 0:
                 missing_tokens.append(token)
                 continue
-            if len(posting) > self.broad_posting_limit:
+            if posting_size > self.broad_posting_limit:
                 broad_skipped += 1
                 saw_broad = True
                 continue
-            consume(posting, 4.0 * self.index.idf_for_token(token))
+            consume(
+                self.index.token_posting(token, predicate),
+                4.0 * self.index.idf_for_token(token),
+            )
 
         for token in missing_tokens:
             for fragment in _fragments(token):
                 fragment_lookups += 1
-                posting = self.index.fragment_posting(fragment, predicate)
-                if not posting:
+                posting_size = self.index.fragment_posting_size(fragment, predicate)
+                if posting_size == 0:
                     continue
-                if len(posting) > self.broad_posting_limit:
+                if posting_size > self.broad_posting_limit:
                     broad_skipped += 1
                     saw_broad = True
                     continue
-                consume(posting, 3.0)
+                consume(self.index.fragment_posting(fragment, predicate), 3.0)
 
         for token in missing_tokens:
             for gram in _ngrams(token):
                 ngram_lookups += 1
-                posting = self.index.ngram_posting(gram, predicate)
-                if not posting:
+                posting_size = self.index.ngram_posting_size(gram, predicate)
+                if posting_size == 0:
                     continue
-                if len(posting) > self.broad_posting_limit:
+                if posting_size > self.broad_posting_limit:
                     broad_skipped += 1
                     saw_broad = True
                     continue
-                consume(posting, 1.0)
+                consume(self.index.ngram_posting(gram, predicate), 1.0)
 
         ranked = sorted(candidate_scores.items(), key=lambda x: (-x[1], x[0]))
         candidates = [subject_id for subject_id, _ in ranked[: self.candidate_limit]]
