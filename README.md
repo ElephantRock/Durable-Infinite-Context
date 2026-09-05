@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.4
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.5
 
 This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
@@ -11,7 +11,7 @@ This repository implements the falsification-first research prototype for the Du
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, and planner workloads.
+- Synthetic correction, transition, conflict, scaling, retrieval, planner, and query-resolution workloads.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
@@ -85,7 +85,7 @@ Important limitation: the v0.3 planner receives oracle-resolved structured const
 
 ## v0.4 — Non-oracle query planning
 
-v0.4 removes the oracle query plan while retaining oracle assertions. The new deterministic planner receives only user-visible question text plus subject profiles derived from indexed memory.
+v0.4 removes the oracle query plan while retaining oracle assertions. The deterministic planner receives only user-visible question text plus subject profiles derived from memory.
 
 New components:
 
@@ -98,11 +98,42 @@ New components:
 
 The controlled benchmark contains 260 cases. All 200 resolvable cases matched the oracle plan and complete-support retrieval, while all 60 intentionally underdetermined identity cases abstained with zero over-resolution.
 
-Run the current planner milestone with:
+Important limitation: v0.4 scores every subject profile at query time. It validates the semantics of conditional hard-constraint formation, not scalable identity resolution.
+
+## v0.5 — Scalable query resolution
+
+v0.5 replaces the v0.4 full subject-profile scan with a rebuildable candidate-generation materialization:
+
+- `rag/scalable_planner.py`: exact token, separator-fragment, and four-character n-gram postings with bounded profile scoring;
+- `simulator/scalable_planner.py`: cardinality, typo/noise, contextual-disambiguation, and irreducible-ambiguity workloads;
+- `benchmark/scalable_planner_metrics.py`: candidate recall and logical query-work instrumentation;
+- `run_scalable_planner_experiment.py`;
+- `RESULTS_V0.5.md` and `scalable_planner_results.json`.
+
+The first v0.5 mechanism was partially falsified: noisy aliases/descriptors reached only 90% exact-plan accuracy and about 95% candidate recall at scale. The resolver was revised by adding a separator-fragment address channel while leaving the benchmark unchanged.
+
+After revision, all resolvable workloads reached 100% exact-plan accuracy and 100% candidate recall through 50,000 entities. Irreducible ambiguity retained 100% abstention and 0% over-resolution.
+
+At 50,000 entities:
+
+- exact unique identity: 1 profile scored, 11 logical query operations on average;
+- noisy unique identity: 30.45 profiles scored, 184.3 logical operations;
+- exact contextual identity: 1 profile scored, 12 logical operations;
+- noisy contextual identity: 30.45 profiles scored, 187.3 logical operations;
+- irreducible ambiguity: 0 profiles scored, 9 logical operations.
+
+The corresponding logical-work fractions relative to an N-profile scan are approximately 0.00022, 0.003686, 0.00024, 0.003746, and 0.00018.
+
+A negative result is preserved: at only 100 entities, the indexed/fuzzy machinery can cost more than a direct scan. The evidence therefore supports **adaptive resolution** rather than universal indexing: small candidate universes may use direct scanning, while large universes use indexed candidate generation.
+
+Run the current planner milestones with:
 
 ```bash
 python -m unittest discover -s tests -v
 python run_planner_experiment.py
+python run_scalable_planner_experiment.py
 ```
 
-Important limitation: the v0.4 planner uses controlled synthetic language and currently scores against all subject profiles. It validates the semantics of conditional hard-constraint formation, not production-scale entity resolution. A genuine agentic-RAG baseline and real extraction remain mandatory later comparisons.
+Important limitations: assertions are still oracle-provided; the language is controlled and synthetic; index build/update cost is not yet tested; the resolver is not a production entity linker; and a genuine agentic-RAG baseline plus real extraction remain mandatory later comparisons.
+
+The next falsification target is **incremental addressability maintenance**: determine whether these rebuildable query-resolution indexes can be kept correct under local evidence/assertion changes without update cost proportional to total memory.

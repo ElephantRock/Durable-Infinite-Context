@@ -1,0 +1,54 @@
+{
+  "experiment": "v0.5_scalable_query_resolution",
+  "extraction_mode": "oracle_assertions",
+  "candidate_limit": 32,
+  "broad_posting_limit": 128,
+  "cardinalities": [100, 1000, 10000, 50000],
+  "initial_result": {
+    "status": "partially_falsified",
+    "noisy_exact_plan_rate": 0.9,
+    "noisy_candidate_recall_rate_at_scale": 0.95,
+    "revision": "add separator-fragment postings for compound aliases/descriptors"
+  },
+  "revised_result": {
+    "all_resolvable_exact_plan_rate": 1.0,
+    "all_resolvable_candidate_recall_rate": 1.0,
+    "ambiguity_correct_abstention_rate": 1.0,
+    "ambiguity_over_resolution_rate": 0.0,
+    "n_50000": {
+      "unique_exact": {
+        "avg_profiles_scored": 1.0,
+        "avg_logical_work": 11.0,
+        "logical_work_fraction_vs_full_scan": 0.00022
+      },
+      "unique_noisy_alias": {
+        "avg_profiles_scored": 30.45,
+        "avg_logical_work": 184.3,
+        "logical_work_fraction_vs_full_scan": 0.003686
+      },
+      "contextual_exact": {
+        "avg_profiles_scored": 1.0,
+        "avg_logical_work": 12.0,
+        "logical_work_fraction_vs_full_scan": 0.00024
+      },
+      "contextual_noisy_descriptor": {
+        "avg_profiles_scored": 30.45,
+        "avg_logical_work": 187.3,
+        "logical_work_fraction_vs_full_scan": 0.003746
+      },
+      "irreducible_ambiguity": {
+        "avg_profiles_scored": 0.0,
+        "avg_logical_work": 9.0,
+        "logical_work_fraction_vs_full_scan": 0.00018
+      }
+    },
+    "small_n_caveat": {
+      "entity_count": 100,
+      "noisy_alias_avg_logical_work": 364.2,
+      "contextual_exact_avg_logical_work": 143.0,
+      "contextual_noisy_avg_logical_work": 567.2,
+      "ambiguity_avg_logical_work": 141.0,
+      "interpretation": "indexed resolution can be more expensive than direct full scan for small candidate universes"
+    }
+  }
+}
