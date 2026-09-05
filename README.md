@@ -1,6 +1,6 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.3
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.4
 
-This repository implements the first oracle-controlled experiment for the Durable Infinite Context architecture.
+This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
 ## What is implemented
 
@@ -11,7 +11,7 @@ This repository implements the first oracle-controlled experiment for the Durabl
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, and conflict timelines.
+- Synthetic correction, transition, conflict, scaling, retrieval, and planner workloads.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
@@ -55,7 +55,7 @@ A strong agentic RAG comparison remains mandatory before accepting the architect
 
 ## v0.2 — State materialization scaling experiment
 
-The repository now also contains:
+The repository also contains:
 
 - indexed per-key assertion access so on-demand reconciliation is not penalized by a full-store scan;
 - logical read/context cost instrumentation (`benchmark/costs.py`);
@@ -66,18 +66,7 @@ The repository now also contains:
 - total-memory cardinality scaling (`run_cardinality_experiment.py`);
 - `RESULTS_V0.2.md` with interpretation and limitations.
 
-Run all current experiments with:
-
-```bash
-python -m unittest discover -s tests -v
-python run_experiment.py
-python run_scaling_experiment.py
-python run_tradeoff_experiment.py
-python run_cardinality_experiment.py
-```
-
 The v0.2 result narrows the hypothesis: persistent current state is not necessary for semantic correctness or bounded context under oracle retrieval; it earns value as a selective materialization for read-heavy evolving state.
-
 
 ## v0.3 — Selective addressability and coverage control
 
@@ -92,12 +81,28 @@ New components:
 - `run_coverage_experiment.py`;
 - `RESULTS_V0.3.md`.
 
-Run:
+Important limitation: the v0.3 planner receives oracle-resolved structured constraints. The benchmark therefore tests the value of multiple address dimensions once resolved; it does not claim natural-language entity resolution or planner reliability.
+
+## v0.4 — Non-oracle query planning
+
+v0.4 removes the oracle query plan while retaining oracle assertions. The new deterministic planner receives only user-visible question text plus subject profiles derived from indexed memory.
+
+New components:
+
+- `rag/planner.py`: identity, predicate, intent, and temporal plan inference with explicit ambiguity preservation;
+- `rag/planned.py`: multi-address retrieval from inferred plans without reading hidden `QueryCase` identity/predicate/time fields;
+- `simulator/planner.py`: unique-identity, contextual-collision, irreducible-ambiguity, and temporal workloads;
+- `benchmark/planner_metrics.py`;
+- `run_planner_experiment.py`;
+- `RESULTS_V0.4.md` and `planner_results.json`.
+
+The controlled benchmark contains 260 cases. All 200 resolvable cases matched the oracle plan and complete-support retrieval, while all 60 intentionally underdetermined identity cases abstained with zero over-resolution.
+
+Run the current planner milestone with:
 
 ```bash
 python -m unittest discover -s tests -v
-python run_retrieval_experiment.py
-python run_coverage_experiment.py
+python run_planner_experiment.py
 ```
 
-Important limitation: the v0.3 planner receives oracle-resolved structured constraints. The benchmark therefore tests the value of multiple address dimensions once resolved; it does not yet claim natural-language entity resolution or planner reliability.
+Important limitation: the v0.4 planner uses controlled synthetic language and currently scores against all subject profiles. It validates the semantics of conditional hard-constraint formation, not production-scale entity resolution. A genuine agentic-RAG baseline and real extraction remain mandatory later comparisons.

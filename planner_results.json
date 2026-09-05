@@ -1,0 +1,35 @@
+{
+  "experiment": "v0.4_non_oracle_planner",
+  "extraction_mode": "oracle_assertions",
+  "planner_mode": "question_text_plus_memory_profiles",
+  "retrieval_budget": 4,
+  "cases": 260,
+  "unique_identity": [
+    {"distractors_per_target": 0, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"distractors_per_target": 10, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"distractors_per_target": 100, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0}
+  ],
+  "contextual_identity_collision": [
+    {"distractors_per_target": 1, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"distractors_per_target": 10, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"distractors_per_target": 100, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0}
+  ],
+  "irreducible_identity_collision": [
+    {"distractors_per_target": 1, "cases": 20, "correct_abstention_rate": 1.0, "over_resolution_rate": 0.0},
+    {"distractors_per_target": 10, "cases": 20, "correct_abstention_rate": 1.0, "over_resolution_rate": 0.0},
+    {"distractors_per_target": 100, "cases": 20, "correct_abstention_rate": 1.0, "over_resolution_rate": 0.0}
+  ],
+  "temporal_resolution": [
+    {"history_len": 4, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"history_len": 16, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"history_len": 64, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0},
+    {"history_len": 256, "cases": 20, "exact_plan_rate": 1.0, "inferred_complete_support_rate": 1.0, "oracle_complete_support_rate": 1.0}
+  ],
+  "limitations": [
+    "oracle assertions",
+    "controlled predicate vocabulary",
+    "synthetic language",
+    "linear scan over subject profiles",
+    "no genuine agentic-RAG baseline"
+  ]
+}
