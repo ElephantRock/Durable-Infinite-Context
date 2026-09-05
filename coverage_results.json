@@ -1,0 +1,190 @@
+{
+  "experiment": "v0.3_coverage_control",
+  "cases": 400,
+  "fixed_budget_1_coverage_rate": 0.0,
+  "adaptive_coverage_rate": 1.0,
+  "avg_adaptive_rounds": 2.0,
+  "avg_adaptive_returned": 2.0,
+  "sample_traces": [
+    {
+      "query_id": "corr-0000-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["corr-0000-e2"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["corr-0000-e2", "corr-0000-e1"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "trans-0000-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["trans-0000-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["trans-0000-e1", "trans-0000-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0000-q-current",
+      "question_type": "current",
+      "fixed_budget_1": ["conf-0000-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0000-e1", "conf-0000-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0000-q-prov",
+      "question_type": "provenance",
+      "fixed_budget_1": ["conf-0000-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0000-e1", "conf-0000-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "corr-0001-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["corr-0001-e2"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["corr-0001-e2", "corr-0001-e1"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "trans-0001-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["trans-0001-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["trans-0001-e1", "trans-0001-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0001-q-current",
+      "question_type": "current",
+      "fixed_budget_1": ["conf-0001-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0001-e1", "conf-0001-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0001-q-prov",
+      "question_type": "provenance",
+      "fixed_budget_1": ["conf-0001-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0001-e1", "conf-0001-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "corr-0002-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["corr-0002-e2"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["corr-0002-e2", "corr-0002-e1"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "trans-0002-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["trans-0002-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["trans-0002-e1", "trans-0002-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0002-q-current",
+      "question_type": "current",
+      "fixed_budget_1": ["conf-0002-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0002-e1", "conf-0002-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0002-q-prov",
+      "question_type": "provenance",
+      "fixed_budget_1": ["conf-0002-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0002-e1", "conf-0002-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "corr-0003-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["corr-0003-e2"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["corr-0003-e2", "corr-0003-e1"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "trans-0003-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["trans-0003-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["trans-0003-e1", "trans-0003-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0003-q-current",
+      "question_type": "current",
+      "fixed_budget_1": ["conf-0003-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0003-e1", "conf-0003-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0003-q-prov",
+      "question_type": "provenance",
+      "fixed_budget_1": ["conf-0003-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0003-e1", "conf-0003-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "corr-0004-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["corr-0004-e2"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["corr-0004-e2", "corr-0004-e1"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "trans-0004-q-rel",
+      "question_type": "relation_classification",
+      "fixed_budget_1": ["trans-0004-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["trans-0004-e1", "trans-0004-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0004-q-current",
+      "question_type": "current",
+      "fixed_budget_1": ["conf-0004-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0004-e1", "conf-0004-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    },
+    {
+      "query_id": "conf-0004-q-prov",
+      "question_type": "provenance",
+      "fixed_budget_1": ["conf-0004-e1"],
+      "fixed_coverage": false,
+      "adaptive_ids": ["conf-0004-e1", "conf-0004-e2"],
+      "adaptive_rounds": 2,
+      "adaptive_coverage": true
+    }
+  ]
+}
