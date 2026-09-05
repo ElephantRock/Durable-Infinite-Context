@@ -1,5 +1,6 @@
 import unittest
 
+from core.models import Assertion, AssertionRelation, RelationType, StateStatus
 from core.storage import MemoryStore
 from simulator.world import correction_scenario, transition_scenario, conflict_scenario
 from state.incremental import apply_incremental_current_state
@@ -37,6 +38,28 @@ class IncrementalTests(unittest.TestCase):
         s, _ = ingest_incrementally(conflict_scenario(1))
         cell = next(iter(s.state.values()))
         self.assertEqual(cell.status.value, "contested")
+
+    def test_partial_correction_preserves_surviving_competitor(self):
+        store = MemoryStore()
+        a1 = Assertion("a1", "project-x", "deadline", 10, 1)
+        a2 = Assertion("a2", "project-x", "deadline", 12, 2)
+        a3 = Assertion("a3", "project-x", "deadline", 14, 3)
+
+        store.add_assertion(a1)
+        apply_incremental_current_state(store, a1, [])
+        store.add_assertion(a2)
+        apply_incremental_current_state(store, a2, [])
+
+        correction = AssertionRelation("a3", RelationType.CORRECTS, "a2")
+        store.add_assertion(a3)
+        store.add_relation(correction)
+        cost = apply_incremental_current_state(store, a3, [correction])
+
+        cell = store.state[a3.key]
+        self.assertEqual(cell.status, StateStatus.CONTESTED)
+        self.assertCountEqual(cell.competing_assertion_ids, ["a1", "a3"])
+        self.assertIn("a2", cell.historical_assertion_ids)
+        self.assertEqual(cost.fallbacks, 1)
 
 
 if __name__ == "__main__":

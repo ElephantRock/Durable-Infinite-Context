@@ -1,6 +1,8 @@
 import unittest
 
 from benchmark.evaluator import build_store
+from core.models import EvidenceRecord
+from core.storage import MemoryStore
 from rag.retrieval import RetrievalIndex, Retriever, coverage_satisfied
 from simulator.retrieval import distractor_saturation_scenario, temporal_history_scenario
 from simulator.world import correction_scenario, conflict_scenario
@@ -40,6 +42,23 @@ class RetrievalTests(unittest.TestCase):
         ids, trace = r.adaptive_search(q, initial_budget=1, max_budget=4)
         self.assertTrue(trace.coverage_satisfied)
         self.assertGreaterEqual(len(ids), 2)
+
+    def test_empty_store_returns_no_hits(self):
+        index = RetrievalIndex(MemoryStore())
+        lexical, lexical_considered = index.lexical("anything", budget=1)
+        semantic, semantic_considered = index.semantic("anything", budget=1)
+        self.assertEqual(lexical, [])
+        self.assertEqual(semantic, [])
+        self.assertEqual(lexical_considered, 0)
+        self.assertEqual(semantic_considered, 0)
+
+    def test_concept_empty_corpus_returns_no_semantic_hits(self):
+        store = MemoryStore()
+        store.add_evidence(EvidenceRecord("e1", "project-0001", "source", 1))
+        index = RetrievalIndex(store)
+        semantic, considered = index.semantic("project-0001", budget=1)
+        self.assertEqual(semantic, [])
+        self.assertEqual(considered, 1)
 
 
 if __name__ == "__main__":
