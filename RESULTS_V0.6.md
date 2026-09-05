@@ -36,7 +36,7 @@ These indexes prevent the maintenance path from hiding a global canonical-store 
 
 ### Incremental subject-profile materialization
 
-`SubjectProfileIndex` now uses mutable unique-subject postings for:
+`SubjectProfileIndex` uses mutable unique-subject postings for:
 
 - exact tokens;
 - separator fragments;
@@ -99,14 +99,7 @@ No benchmark threshold or maintenance mechanism was relaxed.
 
 ## Observed result
 
-The corrected CI run passed:
-
-- **35/35 unit tests**;
-- the complete v0.4 planner regression;
-- the complete v0.5 scalable-resolution regression;
-- the v0.6 maintenance sweep.
-
-Every v0.6 measurement had:
+The corrected maintenance sweep passed at every cardinality. Every measurement had:
 
 - `materialization_equal = true`;
 - `semantic_check = true`.
@@ -159,6 +152,24 @@ Cost_{update} \approx f(Fanout, LocalProfileComplexity)
 \]
 
 rather than total entity cardinality.
+
+## Review hardening
+
+The first automated code review found four issues/risk points. All were addressed before merge:
+
+1. **Hidden broad-posting copy cost.** Mutable posting accessors were creating a full `frozenset` before the planner checked broadness, reintroducing unmeasured O(N) allocation/iteration on common aliases. Candidate generation now reads O(1) posting cardinality first and materializes only bounded postings. A regression test fails if a broad token/fragment/n-gram posting is materialized.
+2. **Alias-test semantics.** The review independently identified the already-corrected test expectation described above; the current test checks exact-address replacement while preserving legitimate fuzzy recovery.
+3. **Non-deterministic equal-sequence ordering.** Set-backed assertion locality indexes now sort by `(recorded_seq, assertion_id)` so Python hash ordering cannot change semantic results. A regression covers the tie case.
+4. **Pre-populated-store hydration.** `MemoryStore.__post_init__()` rebuilds locality indexes from canonical assertions/relations, preserving rebuild behavior for restored/pre-populated stores. A regression constructs such a store directly and verifies addressability/dependency hydration.
+
+The hardened CI run `33997463513` passed:
+
+- **38/38 unit tests**;
+- the complete v0.4 planner regression;
+- the complete v0.5 scalable-resolution regression with the same query-work measurements;
+- the complete v0.6 maintenance sweep with the same measurements above.
+
+A requested second automated Codex review could not execute because the repository's code-review usage quota was exhausted. Therefore the final review claim is limited to: all findings from the available review were addressed and resolved, and the hardened exact head passed the full CI gate. It is not represented as a clean second automated review.
 
 ## Interpretation
 
