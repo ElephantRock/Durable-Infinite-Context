@@ -1,0 +1,64 @@
+{
+  "experiment": "v0.7_dependency_cascade_invalidation",
+  "source": "GitHub Actions run 33999047206",
+  "unit_tests": {"passed": 45, "failed": 0},
+  "cardinalities": [100, 1000, 10000, 50000],
+  "all_materializations_equal": true,
+  "dependency_graph_parity_included": true,
+  "all_semantic_checks_passed": true,
+  "all_fresh_after_rebuild": true,
+  "retirement_enabled": true,
+  "integrated_rows": [
+    {"entity_count":100,"operation":"replace_evidence_payload","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":60,"full_rebuild_work":10076,"work_fraction_vs_full_rebuild":0.0059547439460103215},
+    {"entity_count":100,"operation":"replace_assertion_object","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":21,"full_rebuild_work":10076,"work_fraction_vs_full_rebuild":0.0020841603811036125},
+    {"entity_count":100,"operation":"insert_correction","invalidated_nodes":4,"rebuilt_nodes":4,"incremental_work":88,"full_rebuild_work":10110,"work_fraction_vs_full_rebuild":0.008704253214638972},
+    {"entity_count":100,"operation":"replace_shared_evidence","invalidated_nodes":12,"rebuilt_nodes":12,"incremental_work":270,"full_rebuild_work":10318,"work_fraction_vs_full_rebuild":0.02616786198875751},
+    {"entity_count":100,"operation":"delete_assertion","invalidated_nodes":4,"rebuilt_nodes":4,"retired_nodes":4,"incremental_work":109,"full_rebuild_work":10217,"work_fraction_vs_full_rebuild":0.010668493686992268},
+
+    {"entity_count":1000,"operation":"replace_evidence_payload","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":60,"full_rebuild_work":102776,"work_fraction_vs_full_rebuild":0.0005837938818401183},
+    {"entity_count":1000,"operation":"replace_assertion_object","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":21,"full_rebuild_work":102776,"work_fraction_vs_full_rebuild":0.00020432785864404142},
+    {"entity_count":1000,"operation":"insert_correction","invalidated_nodes":4,"rebuilt_nodes":4,"incremental_work":88,"full_rebuild_work":102810,"work_fraction_vs_full_rebuild":0.0008559478649936776},
+    {"entity_count":1000,"operation":"replace_shared_evidence","invalidated_nodes":12,"rebuilt_nodes":12,"incremental_work":270,"full_rebuild_work":103018,"work_fraction_vs_full_rebuild":0.002620901201731736},
+    {"entity_count":1000,"operation":"delete_assertion","invalidated_nodes":4,"rebuilt_nodes":4,"retired_nodes":4,"incremental_work":111,"full_rebuild_work":102915,"work_fraction_vs_full_rebuild":0.0010785599766797843},
+
+    {"entity_count":10000,"operation":"replace_evidence_payload","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":60,"full_rebuild_work":1029776,"work_fraction_vs_full_rebuild":0.000058265098429172946},
+    {"entity_count":10000,"operation":"replace_assertion_object","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":21,"full_rebuild_work":1029776,"work_fraction_vs_full_rebuild":0.000020392784450210533},
+    {"entity_count":10000,"operation":"insert_correction","invalidated_nodes":4,"rebuilt_nodes":4,"incremental_work":88,"full_rebuild_work":1029810,"work_fraction_vs_full_rebuild":0.00008545265631524261},
+    {"entity_count":10000,"operation":"replace_shared_evidence","invalidated_nodes":12,"rebuilt_nodes":12,"incremental_work":270,"full_rebuild_work":1030018,"work_fraction_vs_full_rebuild":0.0002621313413940339},
+    {"entity_count":10000,"operation":"delete_assertion","invalidated_nodes":4,"rebuilt_nodes":4,"retired_nodes":4,"incremental_work":111,"full_rebuild_work":1029915,"work_fraction_vs_full_rebuild":0.00010777588441764611},
+
+    {"entity_count":50000,"operation":"replace_evidence_payload","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":60,"full_rebuild_work":5149752,"work_fraction_vs_full_rebuild":0.00001165104649699636},
+    {"entity_count":50000,"operation":"replace_assertion_object","invalidated_nodes":3,"rebuilt_nodes":3,"incremental_work":21,"full_rebuild_work":5149752,"work_fraction_vs_full_rebuild":0.000004077866273948726},
+    {"entity_count":50000,"operation":"insert_correction","invalidated_nodes":4,"rebuilt_nodes":4,"incremental_work":88,"full_rebuild_work":5149786,"work_fraction_vs_full_rebuild":0.000017088088708928878},
+    {"entity_count":50000,"operation":"replace_shared_evidence","invalidated_nodes":12,"rebuilt_nodes":12,"incremental_work":270,"full_rebuild_work":5149994,"work_fraction_vs_full_rebuild":0.00005242724554630549},
+    {"entity_count":50000,"operation":"delete_assertion","invalidated_nodes":4,"rebuilt_nodes":4,"retired_nodes":4,"incremental_work":111,"full_rebuild_work":5149891,"work_fraction_vs_full_rebuild":0.00002155385424662386}
+  ],
+  "topology_cardinality_control": [
+    {"total_branches":100,"depth":4,"fanout":4,"affected_nodes":16,"invalidation_work":50,"unaffected_probe_fresh":true},
+    {"total_branches":1000,"depth":4,"fanout":4,"affected_nodes":16,"invalidation_work":50,"unaffected_probe_fresh":true},
+    {"total_branches":10000,"depth":4,"fanout":4,"affected_nodes":16,"invalidation_work":50,"unaffected_probe_fresh":true}
+  ],
+  "topology_depth_fanout": [
+    {"depth":1,"fanout":1,"affected_nodes":1,"invalidation_work":5},
+    {"depth":1,"fanout":4,"affected_nodes":4,"invalidation_work":14},
+    {"depth":1,"fanout":16,"affected_nodes":16,"invalidation_work":50},
+    {"depth":1,"fanout":64,"affected_nodes":64,"invalidation_work":194},
+    {"depth":2,"fanout":1,"affected_nodes":2,"invalidation_work":8},
+    {"depth":2,"fanout":4,"affected_nodes":8,"invalidation_work":26},
+    {"depth":2,"fanout":16,"affected_nodes":32,"invalidation_work":98},
+    {"depth":2,"fanout":64,"affected_nodes":128,"invalidation_work":386},
+    {"depth":4,"fanout":1,"affected_nodes":4,"invalidation_work":14},
+    {"depth":4,"fanout":4,"affected_nodes":16,"invalidation_work":50},
+    {"depth":4,"fanout":16,"affected_nodes":64,"invalidation_work":194},
+    {"depth":4,"fanout":64,"affected_nodes":256,"invalidation_work":770},
+    {"depth":8,"fanout":1,"affected_nodes":8,"invalidation_work":26},
+    {"depth":8,"fanout":4,"affected_nodes":32,"invalidation_work":98},
+    {"depth":8,"fanout":16,"affected_nodes":128,"invalidation_work":386},
+    {"depth":8,"fanout":64,"affected_nodes":512,"invalidation_work":1538}
+  ],
+  "observed_topology_formula": {
+    "affected_nodes": "fanout * depth",
+    "invalidation_work": "2 + 3 * fanout * depth"
+  },
+  "invariant": "invalidation + selective rebuild + local retirement work scales with the true affected dependency subgraph rather than total derived-memory cardinality"
+}
