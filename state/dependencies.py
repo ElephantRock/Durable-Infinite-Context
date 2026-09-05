@@ -216,3 +216,13 @@ class DependencyGraph:
 
     def edge_count(self) -> int:
         return sum(len(dependencies) for dependencies in self._dependencies.values())
+
+    def equivalent_to(self, other: "DependencyGraph") -> bool:
+        """Exact parity for derived lineage/lifecycle metadata."""
+
+        return (
+            self._dependencies == other._dependencies
+            and self._dependents == other._dependents
+            and self._status == other._status
+            and self._kind == other._kind
+        )
