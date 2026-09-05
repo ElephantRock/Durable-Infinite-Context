@@ -18,7 +18,9 @@ class DependencyTrace:
     edges_traversed: int = 0
     nodes_invalidated: int = 0
     nodes_rebuilt: int = 0
+    nodes_retired: int = 0
     dependency_edges_registered: int = 0
+    dependency_edges_removed: int = 0
     assertion_reads: int = 0
     relation_reads: int = 0
     evidence_reads: int = 0
@@ -34,7 +36,9 @@ class DependencyTrace:
             + self.edges_traversed
             + self.nodes_invalidated
             + self.nodes_rebuilt
+            + self.nodes_retired
             + self.dependency_edges_registered
+            + self.dependency_edges_removed
             + self.assertion_reads
             + self.relation_reads
             + self.evidence_reads
@@ -49,7 +53,9 @@ class DependencyTrace:
         self.edges_traversed += other.edges_traversed
         self.nodes_invalidated += other.nodes_invalidated
         self.nodes_rebuilt += other.nodes_rebuilt
+        self.nodes_retired += other.nodes_retired
         self.dependency_edges_registered += other.dependency_edges_registered
+        self.dependency_edges_removed += other.dependency_edges_removed
         self.assertion_reads += other.assertion_reads
         self.relation_reads += other.relation_reads
         self.evidence_reads += other.evidence_reads
@@ -91,6 +97,7 @@ class DependencyGraph:
                 dependents.discard(node_id)
                 if not dependents:
                     self._dependents.pop(dependency, None)
+            trace.dependency_edges_removed += 1
 
         for dependency in new - old:
             self._dependents.setdefault(dependency, set()).add(node_id)
@@ -101,15 +108,37 @@ class DependencyGraph:
         self._status[node_id] = status
         return trace
 
-    def remove_derived(self, node_id: str) -> None:
-        for dependency in self._dependencies.pop(node_id, set()):
+    def remove_derived(self, node_id: str) -> DependencyTrace:
+        """Retire a derived leaf and account for metadata cleanup work.
+
+        Callers must retire dependents before dependencies. Refusing to remove a
+        node with live derived dependents prevents silent dangling lineage edges.
+        """
+
+        trace = DependencyTrace()
+        if node_id not in self._status:
+            return trace
+        live_dependents = self._dependents.get(node_id, set())
+        if live_dependents:
+            raise ValueError(
+                f"Cannot retire {node_id}; derived dependents remain: "
+                f"{sorted(live_dependents)}"
+            )
+
+        dependencies = self._dependencies.pop(node_id, set())
+        for dependency in dependencies:
             dependents = self._dependents.get(dependency)
             if dependents is not None:
                 dependents.discard(node_id)
                 if not dependents:
                     self._dependents.pop(dependency, None)
+            trace.dependency_edges_removed += 1
+
+        self._dependents.pop(node_id, None)
         self._status.pop(node_id, None)
         self._kind.pop(node_id, None)
+        trace.nodes_retired = 1
+        return trace
 
     def invalidate_from(self, root_ids: set[str] | tuple[str, ...] | list[str]) -> DependencyTrace:
         """Invalidate registered descendants of canonical or derived roots.
