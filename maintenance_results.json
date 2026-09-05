@@ -1,0 +1,42 @@
+{
+  "experiment": "v0.6_incremental_addressability_maintenance",
+  "source": "GitHub Actions run 33997463513",
+  "cardinalities": [100, 1000, 10000, 50000],
+  "all_materializations_equal": true,
+  "all_semantic_checks_passed": true,
+  "review_hardening": true,
+  "unit_tests": {"passed": 38, "failed": 0},
+  "rows": [
+    {"entity_count":100,"operation":"insert_subject","affected_subjects":1,"incremental_work":88,"rebuild_work":8666,"work_fraction_vs_rebuild":0.010154627279021463},
+    {"entity_count":100,"operation":"replace_evidence_payload","affected_subjects":1,"incremental_work":36,"rebuild_work":8664,"work_fraction_vs_rebuild":0.004155124653739612},
+    {"entity_count":100,"operation":"change_predicate","affected_subjects":1,"incremental_work":86,"rebuild_work":8664,"work_fraction_vs_rebuild":0.009926131117266852},
+    {"entity_count":100,"operation":"rebind_assertion_evidence","affected_subjects":1,"incremental_work":40,"rebuild_work":8666,"work_fraction_vs_rebuild":0.004615739672282483},
+    {"entity_count":100,"operation":"replace_shared_evidence","affected_subjects":4,"incremental_work":172,"rebuild_work":8862,"work_fraction_vs_rebuild":0.019408711351839313},
+    {"entity_count":100,"operation":"delete_assertion","affected_subjects":1,"incremental_work":77,"rebuild_work":8776,"work_fraction_vs_rebuild":0.008773928896991795},
+    {"entity_count":100,"operation":"delete_evidence","affected_subjects":1,"incremental_work":79,"rebuild_work":8693,"work_fraction_vs_rebuild":0.009087771770389969},
+
+    {"entity_count":1000,"operation":"insert_subject","affected_subjects":1,"incremental_work":88,"rebuild_work":87866,"work_fraction_vs_rebuild":0.0010015250495072042},
+    {"entity_count":1000,"operation":"replace_evidence_payload","affected_subjects":1,"incremental_work":36,"rebuild_work":87864,"work_fraction_vs_rebuild":0.00040972411909314397},
+    {"entity_count":1000,"operation":"change_predicate","affected_subjects":1,"incremental_work":88,"rebuild_work":87864,"work_fraction_vs_rebuild":0.0010015478466721297},
+    {"entity_count":1000,"operation":"rebind_assertion_evidence","affected_subjects":1,"incremental_work":40,"rebuild_work":87866,"work_fraction_vs_rebuild":0.00045523865886691096},
+    {"entity_count":1000,"operation":"replace_shared_evidence","affected_subjects":4,"incremental_work":172,"rebuild_work":88062,"work_fraction_vs_rebuild":0.0019531693579523516},
+    {"entity_count":1000,"operation":"delete_assertion","affected_subjects":1,"incremental_work":79,"rebuild_work":87974,"work_fraction_vs_rebuild":0.0008979925887193943},
+    {"entity_count":1000,"operation":"delete_evidence","affected_subjects":1,"incremental_work":81,"rebuild_work":87889,"work_fraction_vs_rebuild":0.0009216170396750446},
+
+    {"entity_count":10000,"operation":"insert_subject","affected_subjects":1,"incremental_work":88,"rebuild_work":879866,"work_fraction_vs_rebuild":0.00010001522959177875},
+    {"entity_count":10000,"operation":"replace_evidence_payload","affected_subjects":1,"incremental_work":36,"rebuild_work":879864,"work_fraction_vs_rebuild":0.00004091541420037642},
+    {"entity_count":10000,"operation":"change_predicate","affected_subjects":1,"incremental_work":88,"rebuild_work":879864,"work_fraction_vs_rebuild":0.00010001545693425348},
+    {"entity_count":10000,"operation":"rebind_assertion_evidence","affected_subjects":1,"incremental_work":40,"rebuild_work":879866,"work_fraction_vs_rebuild":0.000045461467996263064},
+    {"entity_count":10000,"operation":"replace_shared_evidence","affected_subjects":4,"incremental_work":172,"rebuild_work":880062,"work_fraction_vs_rebuild":0.00019544077576352575},
+    {"entity_count":10000,"operation":"delete_assertion","affected_subjects":1,"incremental_work":79,"rebuild_work":879974,"work_fraction_vs_rebuild":0.0000897753797271283},
+    {"entity_count":10000,"operation":"delete_evidence","affected_subjects":1,"incremental_work":81,"rebuild_work":879889,"work_fraction_vs_rebuild":0.00009205706628904328},
+
+    {"entity_count":50000,"operation":"insert_subject","affected_subjects":1,"incremental_work":88,"rebuild_work":4399842,"work_fraction_vs_rebuild":0.000020000718207608364},
+    {"entity_count":50000,"operation":"replace_evidence_payload","affected_subjects":1,"incremental_work":36,"rebuild_work":4399840,"work_fraction_vs_rebuild":0.000008182115713298666},
+    {"entity_count":50000,"operation":"change_predicate","affected_subjects":1,"incremental_work":88,"rebuild_work":4399840,"work_fraction_vs_rebuild":0.000020000727299174514},
+    {"entity_count":50000,"operation":"rebind_assertion_evidence","affected_subjects":1,"incremental_work":40,"rebuild_work":4399842,"work_fraction_vs_rebuild":0.000009091235548912892},
+    {"entity_count":50000,"operation":"replace_shared_evidence","affected_subjects":4,"incremental_work":172,"rebuild_work":4400038,"work_fraction_vs_rebuild":0.000039090571490518944},
+    {"entity_count":50000,"operation":"delete_assertion","affected_subjects":1,"incremental_work":79,"rebuild_work":4399950,"work_fraction_vs_rebuild":0.00001795474948578961},
+    {"entity_count":50000,"operation":"delete_evidence","affected_subjects":1,"incremental_work":81,"rebuild_work":4399865,"work_fraction_vs_rebuild":0.000018409655750801444}
+  ]
+}

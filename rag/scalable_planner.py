@@ -55,115 +55,283 @@ class ResolutionTrace:
         )
 
 
+@dataclass
+class MaintenanceTrace:
+    subjects_refreshed: int = 0
+    assertions_examined: int = 0
+    evidence_refs_examined: int = 0
+    evidence_records_examined: int = 0
+    profile_tokens_examined: int = 0
+    posting_additions: int = 0
+    posting_removals: int = 0
+    predicate_posting_additions: int = 0
+    predicate_posting_removals: int = 0
+
+    @property
+    def logical_work(self) -> int:
+        return (
+            self.subjects_refreshed
+            + self.assertions_examined
+            + self.evidence_refs_examined
+            + self.evidence_records_examined
+            + self.profile_tokens_examined
+            + self.posting_additions
+            + self.posting_removals
+            + self.predicate_posting_additions
+            + self.predicate_posting_removals
+        )
+
+    def absorb(self, other: "MaintenanceTrace") -> None:
+        self.subjects_refreshed += other.subjects_refreshed
+        self.assertions_examined += other.assertions_examined
+        self.evidence_refs_examined += other.evidence_refs_examined
+        self.evidence_records_examined += other.evidence_records_examined
+        self.profile_tokens_examined += other.profile_tokens_examined
+        self.posting_additions += other.posting_additions
+        self.posting_removals += other.posting_removals
+        self.predicate_posting_additions += other.predicate_posting_additions
+        self.predicate_posting_removals += other.predicate_posting_removals
+
+
 class SubjectProfileIndex:
-    """Rebuildable query-resolution index over durable evidence/assertions.
+    """Rebuildable and incrementally maintainable query-resolution materialization.
 
-    Build cost is intentionally excluded from per-query planner cost. The index is a
-    materialization: it can be regenerated from MemoryStore and does not become a
-    second source of truth.
+    Canonical evidence/assertions remain authoritative. This index stores only derived
+    lexical addressability state and can be regenerated from ``MemoryStore``.
 
-    Profile term frequency is evidence-derived, not assertion-count-derived: each
-    `(subject_id, evidence_id)` pair contributes at most once. Posting lists also
-    contain unique subject IDs, and predicate-specific postings allow a hard
-    predicate constraint to narrow a globally common alias before broadness checks.
+    v0.6 changes the physical representation from immutable posting tuples to mutable
+    unique-subject sets. Update cost no longer requires rebuilding a long posting just
+    to add or remove one subject.
+
+    IDF is computed lazily from current posting cardinality. Eagerly rewriting every
+    token's IDF after total-subject cardinality changes would turn a local insertion or
+    deletion into global vocabulary maintenance.
     """
 
     def __init__(self, store: MemoryStore):
-        subject_predicates: dict[str, set[str]] = defaultdict(set)
-        subject_evidence_ids: dict[str, set[str]] = defaultdict(set)
+        self.profiles: dict[str, Counter[str]] = {}
+        self.subject_predicates: dict[str, set[str]] = {}
+        self.subject_evidence_ids: dict[str, set[str]] = {}
 
-        for assertion in store.assertions.values():
-            subject_predicates[assertion.subject_id].add(assertion.predicate)
-            subject_evidence_ids[assertion.subject_id].update(assertion.evidence_ids)
+        self.token_postings: dict[str, set[str]] = defaultdict(set)
+        self.fragment_postings: dict[str, set[str]] = defaultdict(set)
+        self.ngram_postings: dict[str, set[str]] = defaultdict(set)
+        self.token_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
+        self.fragment_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
+        self.ngram_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
 
-        profiles: dict[str, Counter[str]] = defaultdict(Counter)
-        for subject_id, evidence_ids in subject_evidence_ids.items():
-            for evidence_id in sorted(evidence_ids):
-                evidence = store.evidence.get(evidence_id)
-                if evidence is None:
-                    continue
-                profiles[subject_id].update(
-                    t for t in _tokens(evidence.payload) if t not in _STOP
-                )
+        self.build_trace = MaintenanceTrace()
+        for subject_id in store.subject_ids():
+            self.build_trace.absorb(self.refresh_subject(store, subject_id))
 
-        self.profiles = dict(profiles)
-        self.subject_predicates = {k: set(v) for k, v in subject_predicates.items()}
-        self.total_subjects = len(self.profiles)
+    @property
+    def total_subjects(self) -> int:
+        return len(self.profiles)
 
-        token_postings: dict[str, set[str]] = defaultdict(set)
-        fragment_postings: dict[str, set[str]] = defaultdict(set)
-        ngram_postings: dict[str, set[str]] = defaultdict(set)
-        token_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
-        fragment_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
-        ngram_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
-
-        for subject_id, profile in self.profiles.items():
-            predicates = self.subject_predicates.get(subject_id, set())
-            subject_fragments: set[str] = set()
-            subject_ngrams: set[str] = set()
-
-            for token in profile:
-                token_postings[token].add(subject_id)
-                for predicate in predicates:
-                    token_predicate_postings[(token, predicate)].add(subject_id)
-                subject_fragments.update(_fragments(token))
-                subject_ngrams.update(_ngrams(token))
-
-            # Add each subject at most once per fragment/gram, even when several
-            # profile tokens contain the same feature.
-            for fragment in subject_fragments:
-                fragment_postings[fragment].add(subject_id)
-                for predicate in predicates:
-                    fragment_predicate_postings[(fragment, predicate)].add(subject_id)
-
-            for gram in subject_ngrams:
-                ngram_postings[gram].add(subject_id)
-                for predicate in predicates:
-                    ngram_predicate_postings[(gram, predicate)].add(subject_id)
-
-        self.token_postings = {k: tuple(sorted(v)) for k, v in token_postings.items()}
-        self.fragment_postings = {k: tuple(sorted(v)) for k, v in fragment_postings.items()}
-        self.ngram_postings = {k: tuple(sorted(v)) for k, v in ngram_postings.items()}
-        self.token_predicate_postings = {
-            k: tuple(sorted(v)) for k, v in token_predicate_postings.items()
-        }
-        self.fragment_predicate_postings = {
-            k: tuple(sorted(v)) for k, v in fragment_predicate_postings.items()
-        }
-        self.ngram_predicate_postings = {
-            k: tuple(sorted(v)) for k, v in ngram_predicate_postings.items()
-        }
-
+    def idf_for_token(self, token: str) -> float:
         n = max(self.total_subjects, 1)
-        self.idf = {
-            token: math.log((1 + n) / (1 + len(subjects))) + 1.0
-            for token, subjects in self.token_postings.items()
-        }
+        df = len(self.token_postings.get(token, set()))
+        return math.log((1 + n) / (1 + df)) + 1.0
 
-    def token_posting(self, token: str, predicate: Optional[str]) -> tuple[str, ...]:
-        if predicate is None:
-            return self.token_postings.get(token, ())
-        return self.token_predicate_postings.get((token, predicate), ())
+    @staticmethod
+    def _features(profile: Counter[str]) -> tuple[set[str], set[str], set[str]]:
+        tokens = set(profile)
+        fragments: set[str] = set()
+        grams: set[str] = set()
+        for token in tokens:
+            fragments.update(_fragments(token))
+            grams.update(_ngrams(token))
+        return tokens, fragments, grams
 
-    def fragment_posting(self, fragment: str, predicate: Optional[str]) -> tuple[str, ...]:
-        if predicate is None:
-            return self.fragment_postings.get(fragment, ())
-        return self.fragment_predicate_postings.get((fragment, predicate), ())
+    @staticmethod
+    def _add_posting(mapping: dict, key, subject_id: str) -> int:
+        posting = mapping.setdefault(key, set())
+        if subject_id in posting:
+            return 0
+        posting.add(subject_id)
+        return 1
 
-    def ngram_posting(self, gram: str, predicate: Optional[str]) -> tuple[str, ...]:
+    @staticmethod
+    def _remove_posting(mapping: dict, key, subject_id: str) -> int:
+        posting = mapping.get(key)
+        if not posting or subject_id not in posting:
+            return 0
+        posting.remove(subject_id)
+        if not posting:
+            mapping.pop(key, None)
+        return 1
+
+    def _snapshot_subject(
+        self,
+        store: MemoryStore,
+        subject_id: str,
+        trace: MaintenanceTrace,
+    ) -> tuple[Counter[str], set[str], set[str]]:
+        assertions = store.assertions_for_subject(subject_id)
+        trace.assertions_examined += len(assertions)
+
+        predicates: set[str] = set()
+        evidence_ids: set[str] = set()
+        for assertion in assertions:
+            predicates.add(assertion.predicate)
+            trace.evidence_refs_examined += len(assertion.evidence_ids)
+            evidence_ids.update(assertion.evidence_ids)
+
+        profile: Counter[str] = Counter()
+        for evidence_id in sorted(evidence_ids):
+            evidence = store.evidence.get(evidence_id)
+            if evidence is None:
+                continue
+            trace.evidence_records_examined += 1
+            lexical = [t for t in _tokens(evidence.payload) if t not in _STOP]
+            trace.profile_tokens_examined += len(lexical)
+            profile.update(lexical)
+
+        return profile, predicates, evidence_ids
+
+    def refresh_subject(self, store: MemoryStore, subject_id: str) -> MaintenanceTrace:
+        """Recompute one subject from canonical state and patch only changed features."""
+
+        trace = MaintenanceTrace(subjects_refreshed=1)
+        old_profile = self.profiles.get(subject_id, Counter())
+        old_predicates = self.subject_predicates.get(subject_id, set())
+        old_tokens, old_fragments, old_grams = self._features(old_profile)
+
+        new_profile, new_predicates, new_evidence_ids = self._snapshot_subject(
+            store, subject_id, trace
+        )
+        new_tokens, new_fragments, new_grams = self._features(new_profile)
+
+        for feature in old_tokens - new_tokens:
+            trace.posting_removals += self._remove_posting(
+                self.token_postings, feature, subject_id
+            )
+        for feature in new_tokens - old_tokens:
+            trace.posting_additions += self._add_posting(
+                self.token_postings, feature, subject_id
+            )
+
+        for feature in old_fragments - new_fragments:
+            trace.posting_removals += self._remove_posting(
+                self.fragment_postings, feature, subject_id
+            )
+        for feature in new_fragments - old_fragments:
+            trace.posting_additions += self._add_posting(
+                self.fragment_postings, feature, subject_id
+            )
+
+        for feature in old_grams - new_grams:
+            trace.posting_removals += self._remove_posting(
+                self.ngram_postings, feature, subject_id
+            )
+        for feature in new_grams - old_grams:
+            trace.posting_additions += self._add_posting(
+                self.ngram_postings, feature, subject_id
+            )
+
+        old_token_predicates = {(f, p) for f in old_tokens for p in old_predicates}
+        new_token_predicates = {(f, p) for f in new_tokens for p in new_predicates}
+        for key in old_token_predicates - new_token_predicates:
+            trace.predicate_posting_removals += self._remove_posting(
+                self.token_predicate_postings, key, subject_id
+            )
+        for key in new_token_predicates - old_token_predicates:
+            trace.predicate_posting_additions += self._add_posting(
+                self.token_predicate_postings, key, subject_id
+            )
+
+        old_fragment_predicates = {(f, p) for f in old_fragments for p in old_predicates}
+        new_fragment_predicates = {(f, p) for f in new_fragments for p in new_predicates}
+        for key in old_fragment_predicates - new_fragment_predicates:
+            trace.predicate_posting_removals += self._remove_posting(
+                self.fragment_predicate_postings, key, subject_id
+            )
+        for key in new_fragment_predicates - old_fragment_predicates:
+            trace.predicate_posting_additions += self._add_posting(
+                self.fragment_predicate_postings, key, subject_id
+            )
+
+        old_ngram_predicates = {(f, p) for f in old_grams for p in old_predicates}
+        new_ngram_predicates = {(f, p) for f in new_grams for p in new_predicates}
+        for key in old_ngram_predicates - new_ngram_predicates:
+            trace.predicate_posting_removals += self._remove_posting(
+                self.ngram_predicate_postings, key, subject_id
+            )
+        for key in new_ngram_predicates - old_ngram_predicates:
+            trace.predicate_posting_additions += self._add_posting(
+                self.ngram_predicate_postings, key, subject_id
+            )
+
+        if new_profile:
+            self.profiles[subject_id] = new_profile
+        else:
+            self.profiles.pop(subject_id, None)
+
+        if new_predicates:
+            self.subject_predicates[subject_id] = set(new_predicates)
+        else:
+            self.subject_predicates.pop(subject_id, None)
+
+        if new_evidence_ids:
+            self.subject_evidence_ids[subject_id] = set(new_evidence_ids)
+        else:
+            self.subject_evidence_ids.pop(subject_id, None)
+
+        return trace
+
+    def equivalent_to(self, other: "SubjectProfileIndex") -> bool:
+        """Strong materialization parity check used by the v0.6 rebuild oracle."""
+
+        return (
+            self.profiles == other.profiles
+            and self.subject_predicates == other.subject_predicates
+            and self.subject_evidence_ids == other.subject_evidence_ids
+            and dict(self.token_postings) == dict(other.token_postings)
+            and dict(self.fragment_postings) == dict(other.fragment_postings)
+            and dict(self.ngram_postings) == dict(other.ngram_postings)
+            and dict(self.token_predicate_postings) == dict(other.token_predicate_postings)
+            and dict(self.fragment_predicate_postings) == dict(other.fragment_predicate_postings)
+            and dict(self.ngram_predicate_postings) == dict(other.ngram_predicate_postings)
+        )
+
+    def _token_set(self, token: str, predicate: Optional[str]) -> set[str]:
         if predicate is None:
-            return self.ngram_postings.get(gram, ())
-        return self.ngram_predicate_postings.get((gram, predicate), ())
+            return self.token_postings.get(token, set())
+        return self.token_predicate_postings.get((token, predicate), set())
+
+    def _fragment_set(self, fragment: str, predicate: Optional[str]) -> set[str]:
+        if predicate is None:
+            return self.fragment_postings.get(fragment, set())
+        return self.fragment_predicate_postings.get((fragment, predicate), set())
+
+    def _ngram_set(self, gram: str, predicate: Optional[str]) -> set[str]:
+        if predicate is None:
+            return self.ngram_postings.get(gram, set())
+        return self.ngram_predicate_postings.get((gram, predicate), set())
+
+    # Cardinality access is O(1) on the mutable backing set. The planner checks this
+    # before materializing an immutable posting, so broad postings are never copied.
+    def token_posting_size(self, token: str, predicate: Optional[str]) -> int:
+        return len(self._token_set(token, predicate))
+
+    def fragment_posting_size(self, fragment: str, predicate: Optional[str]) -> int:
+        return len(self._fragment_set(fragment, predicate))
+
+    def ngram_posting_size(self, gram: str, predicate: Optional[str]) -> int:
+        return len(self._ngram_set(gram, predicate))
+
+    def token_posting(self, token: str, predicate: Optional[str]) -> frozenset[str]:
+        return frozenset(self._token_set(token, predicate))
+
+    def fragment_posting(self, fragment: str, predicate: Optional[str]) -> frozenset[str]:
+        return frozenset(self._fragment_set(fragment, predicate))
+
+    def ngram_posting(self, gram: str, predicate: Optional[str]) -> frozenset[str]:
+        return frozenset(self._ngram_set(gram, predicate))
 
 
 class ScalableQueryPlanner:
-    """v0.5 planner with bounded indexed subject candidate generation.
-
-    Unlike v0.4 QueryPlanner, this class never iterates over all subject profiles on
-    the query path. Broad postings are not expanded; if no narrower evidence exists,
-    the planner abstains instead of arbitrarily selecting one member of a large alias
-    collision.
-    """
+    """v0.5+ planner with bounded indexed subject candidate generation."""
 
     def __init__(
         self,
@@ -221,56 +389,51 @@ class ScalableQueryPlanner:
         broad_skipped = 0
         saw_broad = False
 
-        def consume(posting: tuple[str, ...], weight: float) -> None:
+        def consume(posting: frozenset[str], weight: float) -> None:
             nonlocal entries_examined
             entries_examined += len(posting)
             for subject_id in posting:
                 candidate_scores[subject_id] += weight
 
-        # Predicate-aware postings apply the hard predicate constraint before the
-        # broadness check. A globally common alias may still be highly selective for
-        # the requested predicate.
         missing_tokens: list[str] = []
         for token in q_tokens:
             token_lookups += 1
-            posting = self.index.token_posting(token, predicate)
-            if not posting:
+            posting_size = self.index.token_posting_size(token, predicate)
+            if posting_size == 0:
                 missing_tokens.append(token)
                 continue
-            if len(posting) > self.broad_posting_limit:
+            if posting_size > self.broad_posting_limit:
                 broad_skipped += 1
                 saw_broad = True
                 continue
-            consume(posting, 4.0 * self.index.idf.get(token, 1.0))
+            consume(
+                self.index.token_posting(token, predicate),
+                4.0 * self.index.idf_for_token(token),
+            )
 
-        # For a misspelled compound alias such as `Atals-0001234`, separator
-        # fragments preserve exact identity-bearing subparts even when the lexical
-        # token and some character grams are corrupted.
         for token in missing_tokens:
             for fragment in _fragments(token):
                 fragment_lookups += 1
-                posting = self.index.fragment_posting(fragment, predicate)
-                if not posting:
+                posting_size = self.index.fragment_posting_size(fragment, predicate)
+                if posting_size == 0:
                     continue
-                if len(posting) > self.broad_posting_limit:
+                if posting_size > self.broad_posting_limit:
                     broad_skipped += 1
                     saw_broad = True
                     continue
-                consume(posting, 3.0)
+                consume(self.index.fragment_posting(fragment, predicate), 3.0)
 
-        # Fuzzy rescue uses unique-subject four-gram postings, preventing repeated
-        # grams across one subject's multiple tokens from amplifying its score.
         for token in missing_tokens:
             for gram in _ngrams(token):
                 ngram_lookups += 1
-                posting = self.index.ngram_posting(gram, predicate)
-                if not posting:
+                posting_size = self.index.ngram_posting_size(gram, predicate)
+                if posting_size == 0:
                     continue
-                if len(posting) > self.broad_posting_limit:
+                if posting_size > self.broad_posting_limit:
                     broad_skipped += 1
                     saw_broad = True
                     continue
-                consume(posting, 1.0)
+                consume(self.index.ngram_posting(gram, predicate), 1.0)
 
         ranked = sorted(candidate_scores.items(), key=lambda x: (-x[1], x[0]))
         candidates = [subject_id for subject_id, _ in ranked[: self.candidate_limit]]
@@ -303,7 +466,7 @@ class ScalableQueryPlanner:
             exact_score = 0.0
             for token in q_tokens:
                 if token in profile:
-                    exact_score += self.index.idf.get(token, 1.0) * (1.0 + math.log(profile[token]))
+                    exact_score += self.index.idf_for_token(token) * (1.0 + math.log(profile[token]))
             score = exact_score + 0.1 * generation_scores.get(subject_id, 0.0)
             scored.append((score, subject_id))
 

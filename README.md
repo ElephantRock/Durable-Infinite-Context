@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.5
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.6
 
 This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
@@ -11,7 +11,7 @@ This repository implements the falsification-first research prototype for the Du
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, planner, and query-resolution workloads.
+- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, and maintenance-locality workloads.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
@@ -126,14 +126,56 @@ The corresponding logical-work fractions relative to an N-profile scan are appro
 
 A negative result is preserved: at only 100 entities, the indexed/fuzzy machinery can cost more than a direct scan. The evidence therefore supports **adaptive resolution** rather than universal indexing: small candidate universes may use direct scanning, while large universes use indexed candidate generation.
 
-Run the current planner milestones with:
+Important limitations: assertions are still oracle-provided; the language is controlled and synthetic; the resolver is not a production entity linker; and a genuine agentic-RAG baseline plus real extraction remain mandatory later comparisons.
+
+## v0.6 — Incremental addressability maintenance
+
+v0.6 tests whether the v0.5 query-resolution materialization can remain correct under canonical mutations without a full-memory rebuild on every write.
+
+New components and changes:
+
+- `MemoryStore` subject-local assertion indexes and direct evidence→subject dependency reference counts;
+- incrementally maintainable token/fragment/n-gram and predicate-specific postings in `SubjectProfileIndex`;
+- lazy IDF computation to avoid global vocabulary maintenance after cardinality changes;
+- `rag/maintenance.py`: affected-region discovery and incremental subject refresh;
+- `simulator/maintenance.py`: controlled mutation worlds;
+- `benchmark/maintenance_metrics.py`: incremental-vs-rebuild logical work and parity instrumentation;
+- `run_maintenance_experiment.py`;
+- `RESULTS_V0.6.md` and `maintenance_results.json`.
+
+The benchmark covers insert, evidence payload/alias replacement, predicate change, assertion→evidence rebind, shared-evidence replacement, assertion deletion, and evidence deletion at 100, 1,000, 10,000, and 50,000 entities.
+
+After every mutation, a fresh complete index is built as a correctness oracle. Every recorded v0.6 case achieved exact materialization equality and passed its semantic check.
+
+At 50,000 entities:
+
+- insert subject: 88 incremental operations versus 4,399,842 for rebuild;
+- replace one evidence payload: 36 versus 4,399,840;
+- change one predicate: 88 versus 4,399,840;
+- rebind one assertion to new evidence: 40 versus 4,399,842;
+- replace evidence shared by four subjects: 172 versus 4,400,038;
+- delete one assertion: 79 versus 4,399,950;
+- delete one evidence record: 81 versus 4,399,865.
+
+The fixed-local operations remain essentially flat as total entity cardinality grows, while the shared-evidence update remains proportional to its fixed fan-out of four. The result supports:
+
+\[
+MaintenanceCost(\Delta M) \propto Size(TrueAffectedSubgraph(\Delta M))
+\]
+
+rather than a universal O(1) write claim.
+
+Review hardening fixed hidden broad-posting materialization cost, deterministic same-sequence assertion ordering, and locality-index hydration for restored/pre-populated stores. The hardened CI run passed **38/38 unit tests** and reproduced the v0.4, v0.5, and v0.6 benchmark results. A requested second automated Codex review could not execute because the repository's code-review usage quota was exhausted; the available review findings were all addressed with regressions.
+
+Run the current planner and maintenance milestones with:
 
 ```bash
 python -m unittest discover -s tests -v
 python run_planner_experiment.py
 python run_scalable_planner_experiment.py
+python run_maintenance_experiment.py
 ```
 
-Important limitations: assertions are still oracle-provided; the language is controlled and synthetic; index build/update cost is not yet tested; the resolver is not a production entity linker; and a genuine agentic-RAG baseline plus real extraction remain mandatory later comparisons.
+Important limitations: v0.6 uses in-memory materializations and oracle assertions; full rebuild is used only as the experiment oracle; distributed consistency, crash recovery, high-fan-out pathological cases, relation-lifecycle cleanup, archive/deletion propagation, and production storage/write amplification remain untested.
 
-The next falsification target is **incremental addressability maintenance**: determine whether these rebuildable query-resolution indexes can be kept correct under local evidence/assertion changes without update cost proportional to total memory.
+The next falsification target is **dependency-cascade invalidation**: determine whether corrections/deletions can propagate through multiple layers of derived state with work proportional to the true affected dependency subgraph rather than total memory.
