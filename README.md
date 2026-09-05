@@ -165,7 +165,7 @@ MaintenanceCost(\Delta M) \propto Size(TrueAffectedSubgraph(\Delta M))
 
 rather than a universal O(1) write claim.
 
-The mutable-index refactor preserves the prior milestones: the corrected CI run passed 35/35 unit tests and reproduced the v0.4 and v0.5 benchmark results.
+Review hardening fixed hidden broad-posting materialization cost, deterministic same-sequence assertion ordering, and locality-index hydration for restored/pre-populated stores. The hardened CI run passed **38/38 unit tests** and reproduced the v0.4, v0.5, and v0.6 benchmark results. A requested second automated Codex review could not execute because the repository's code-review usage quota was exhausted; the available review findings were all addressed with regressions.
 
 Run the current planner and maintenance milestones with:
 
