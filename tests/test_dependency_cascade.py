@@ -29,6 +29,20 @@ class DependencyGraphTests(unittest.TestCase):
         self.assertEqual(trace.nodes_invalidated, 2)
         self.assertEqual(trace.edges_traversed, 2)
 
+    def test_retirement_requires_leaf_to_root_order(self):
+        graph = DependencyGraph()
+        graph.register_derived("parent", "layer", {"canonical"})
+        graph.register_derived("child", "layer", {"parent"})
+
+        with self.assertRaises(ValueError):
+            graph.remove_derived("parent")
+
+        child_trace = graph.remove_derived("child")
+        parent_trace = graph.remove_derived("parent")
+        self.assertEqual(child_trace.nodes_retired, 1)
+        self.assertEqual(parent_trace.nodes_retired, 1)
+        self.assertEqual(graph.derived_nodes(), ())
+
 
 class CascadeMaterializationTests(unittest.TestCase):
     def _materialization(self):
@@ -105,7 +119,7 @@ class CascadeMaterializationTests(unittest.TestCase):
         oracle = CascadeMaterialization(clone_canonical_store(store))
         self.assertTrue(materialization.equivalent_to(oracle))
 
-    def test_assertion_deletion_repairs_all_affected_layers(self):
+    def test_assertion_deletion_repairs_and_retires_all_affected_layers(self):
         store, materialization, maintainer = self._materialization()
         key = ("subject-1", "deadline", "default")
 
@@ -120,11 +134,20 @@ class CascadeMaterializationTests(unittest.TestCase):
             },
         )
 
-        materialization.rebuild()
+        rebuild_trace = materialization.rebuild()
         self.assertNotIn(key, store.state)
         self.assertNotIn(key, materialization.supports)
         self.assertNotIn(key, materialization.contexts)
         self.assertNotIn("subject-1", materialization.index.profiles)
+        self.assertEqual(rebuild_trace.nodes_retired, 4)
+        for node_id in (
+            profile_node("subject-1"),
+            state_node(key),
+            support_node(key),
+            context_node(key),
+        ):
+            self.assertIsNone(materialization.graph.status_of(node_id))
+
         oracle = CascadeMaterialization(clone_canonical_store(store))
         self.assertTrue(materialization.equivalent_to(oracle))
 
