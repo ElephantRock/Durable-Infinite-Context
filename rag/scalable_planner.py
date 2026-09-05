@@ -61,19 +61,28 @@ class SubjectProfileIndex:
     Build cost is intentionally excluded from per-query planner cost. The index is a
     materialization: it can be regenerated from MemoryStore and does not become a
     second source of truth.
+
+    Profile term frequency is evidence-derived, not assertion-count-derived: each
+    `(subject_id, evidence_id)` pair contributes at most once. Posting lists also
+    contain unique subject IDs, and predicate-specific postings allow a hard
+    predicate constraint to narrow a globally common alias before broadness checks.
     """
 
     def __init__(self, store: MemoryStore):
-        profiles: dict[str, Counter[str]] = defaultdict(Counter)
         subject_predicates: dict[str, set[str]] = defaultdict(set)
+        subject_evidence_ids: dict[str, set[str]] = defaultdict(set)
 
         for assertion in store.assertions.values():
             subject_predicates[assertion.subject_id].add(assertion.predicate)
-            for evidence_id in assertion.evidence_ids:
+            subject_evidence_ids[assertion.subject_id].update(assertion.evidence_ids)
+
+        profiles: dict[str, Counter[str]] = defaultdict(Counter)
+        for subject_id, evidence_ids in subject_evidence_ids.items():
+            for evidence_id in sorted(evidence_ids):
                 evidence = store.evidence.get(evidence_id)
                 if evidence is None:
                     continue
-                profiles[assertion.subject_id].update(
+                profiles[subject_id].update(
                     t for t in _tokens(evidence.payload) if t not in _STOP
                 )
 
@@ -81,26 +90,70 @@ class SubjectProfileIndex:
         self.subject_predicates = {k: set(v) for k, v in subject_predicates.items()}
         self.total_subjects = len(self.profiles)
 
-        token_postings: dict[str, list[str]] = defaultdict(list)
-        fragment_postings: dict[str, list[str]] = defaultdict(list)
-        ngram_postings: dict[str, list[str]] = defaultdict(list)
+        token_postings: dict[str, set[str]] = defaultdict(set)
+        fragment_postings: dict[str, set[str]] = defaultdict(set)
+        ngram_postings: dict[str, set[str]] = defaultdict(set)
+        token_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
+        fragment_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
+        ngram_predicate_postings: dict[tuple[str, str], set[str]] = defaultdict(set)
+
         for subject_id, profile in self.profiles.items():
+            predicates = self.subject_predicates.get(subject_id, set())
+            subject_fragments: set[str] = set()
+            subject_ngrams: set[str] = set()
+
             for token in profile:
-                token_postings[token].append(subject_id)
-                for fragment in _fragments(token):
-                    fragment_postings[fragment].append(subject_id)
-                for gram in _ngrams(token):
-                    ngram_postings[gram].append(subject_id)
+                token_postings[token].add(subject_id)
+                for predicate in predicates:
+                    token_predicate_postings[(token, predicate)].add(subject_id)
+                subject_fragments.update(_fragments(token))
+                subject_ngrams.update(_ngrams(token))
+
+            # Add each subject at most once per fragment/gram, even when several
+            # profile tokens contain the same feature.
+            for fragment in subject_fragments:
+                fragment_postings[fragment].add(subject_id)
+                for predicate in predicates:
+                    fragment_predicate_postings[(fragment, predicate)].add(subject_id)
+
+            for gram in subject_ngrams:
+                ngram_postings[gram].add(subject_id)
+                for predicate in predicates:
+                    ngram_predicate_postings[(gram, predicate)].add(subject_id)
 
         self.token_postings = {k: tuple(sorted(v)) for k, v in token_postings.items()}
         self.fragment_postings = {k: tuple(sorted(v)) for k, v in fragment_postings.items()}
         self.ngram_postings = {k: tuple(sorted(v)) for k, v in ngram_postings.items()}
+        self.token_predicate_postings = {
+            k: tuple(sorted(v)) for k, v in token_predicate_postings.items()
+        }
+        self.fragment_predicate_postings = {
+            k: tuple(sorted(v)) for k, v in fragment_predicate_postings.items()
+        }
+        self.ngram_predicate_postings = {
+            k: tuple(sorted(v)) for k, v in ngram_predicate_postings.items()
+        }
 
         n = max(self.total_subjects, 1)
         self.idf = {
             token: math.log((1 + n) / (1 + len(subjects))) + 1.0
             for token, subjects in self.token_postings.items()
         }
+
+    def token_posting(self, token: str, predicate: Optional[str]) -> tuple[str, ...]:
+        if predicate is None:
+            return self.token_postings.get(token, ())
+        return self.token_predicate_postings.get((token, predicate), ())
+
+    def fragment_posting(self, fragment: str, predicate: Optional[str]) -> tuple[str, ...]:
+        if predicate is None:
+            return self.fragment_postings.get(fragment, ())
+        return self.fragment_predicate_postings.get((fragment, predicate), ())
+
+    def ngram_posting(self, gram: str, predicate: Optional[str]) -> tuple[str, ...]:
+        if predicate is None:
+            return self.ngram_postings.get(gram, ())
+        return self.ngram_predicate_postings.get((gram, predicate), ())
 
 
 class ScalableQueryPlanner:
@@ -168,22 +221,19 @@ class ScalableQueryPlanner:
         broad_skipped = 0
         saw_broad = False
 
-        def eligible(subject_id: str) -> bool:
-            return predicate is None or predicate in self.index.subject_predicates.get(subject_id, set())
-
         def consume(posting: tuple[str, ...], weight: float) -> None:
             nonlocal entries_examined
             entries_examined += len(posting)
             for subject_id in posting:
-                if eligible(subject_id):
-                    candidate_scores[subject_id] += weight
+                candidate_scores[subject_id] += weight
 
-        # Exact token postings are the highest-precision candidate source. Common
-        # aliases/predicate words are detected by posting cardinality and skipped.
+        # Predicate-aware postings apply the hard predicate constraint before the
+        # broadness check. A globally common alias may still be highly selective for
+        # the requested predicate.
         missing_tokens: list[str] = []
         for token in q_tokens:
             token_lookups += 1
-            posting = self.index.token_postings.get(token, ())
+            posting = self.index.token_posting(token, predicate)
             if not posting:
                 missing_tokens.append(token)
                 continue
@@ -195,12 +245,11 @@ class ScalableQueryPlanner:
 
         # For a misspelled compound alias such as `Atals-0001234`, separator
         # fragments preserve exact identity-bearing subparts even when the lexical
-        # token and some character grams are corrupted. This is a general normalized
-        # sub-token address channel, not a special case for a particular alias.
+        # token and some character grams are corrupted.
         for token in missing_tokens:
             for fragment in _fragments(token):
                 fragment_lookups += 1
-                posting = self.index.fragment_postings.get(fragment, ())
+                posting = self.index.fragment_posting(fragment, predicate)
                 if not posting:
                     continue
                 if len(posting) > self.broad_posting_limit:
@@ -209,12 +258,12 @@ class ScalableQueryPlanner:
                     continue
                 consume(posting, 3.0)
 
-        # Fuzzy rescue is used for remaining lexical misses. Four-gram postings
-        # tolerate small alias/descriptor typos without scanning all profiles.
+        # Fuzzy rescue uses unique-subject four-gram postings, preventing repeated
+        # grams across one subject's multiple tokens from amplifying its score.
         for token in missing_tokens:
             for gram in _ngrams(token):
                 ngram_lookups += 1
-                posting = self.index.ngram_postings.get(gram, ())
+                posting = self.index.ngram_posting(gram, predicate)
                 if not posting:
                     continue
                 if len(posting) > self.broad_posting_limit:
@@ -246,9 +295,6 @@ class ScalableQueryPlanner:
         q_tokens = [t for t in _tokens(question) if t not in _STOP]
         candidates, generation_scores, trace, saw_broad = self._candidate_subjects(question, predicate)
         if not candidates:
-            # A broad alias with no discriminating narrow token is explicitly
-            # unresolved. This prevents candidate truncation from manufacturing a
-            # false winner.
             return None, (), 0.0, trace
 
         scored: list[tuple[float, str]] = []
@@ -258,8 +304,6 @@ class ScalableQueryPlanner:
             for token in q_tokens:
                 if token in profile:
                     exact_score += self.index.idf.get(token, 1.0) * (1.0 + math.log(profile[token]))
-            # Candidate-generation score carries fuzzy/sub-token evidence into final
-            # ranking while exact lexical overlap remains dominant.
             score = exact_score + 0.1 * generation_scores.get(subject_id, 0.0)
             scored.append((score, subject_id))
 
