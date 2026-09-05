@@ -38,7 +38,11 @@ class ScalablePlannerScore:
         self.total_candidates += trace.candidates_generated
         self.total_profiles_scored += trace.profiles_scored
         self.total_posting_entries_examined += trace.posting_entries_examined
-        self.total_posting_lookups += trace.token_posting_lookups + trace.ngram_posting_lookups
+        self.total_posting_lookups += (
+            trace.token_posting_lookups
+            + trace.fragment_posting_lookups
+            + trace.ngram_posting_lookups
+        )
         self.total_logical_work += trace.logical_work
 
         if should_abstain:
