@@ -119,8 +119,12 @@ class RetrievalIndex:
             for tok in set(_tokens(d.text)):
                 self.token_index[tok].add(d.evidence_id)
 
-        texts = [d.text for d in self.docs] or [""]
-        concept_texts = [concept_normalize(d.text) for d in self.docs] or [""]
+        # TfidfVectorizer rejects an empty vocabulary. Keep a private sentinel in
+        # matrix-only representations so an empty store, blank payloads, or a
+        # concept channel containing only stripped entity identifiers produce an
+        # ordinary no-hit result instead of failing during index construction.
+        texts = [d.text if _tokens(d.text) else "__empty__" for d in self.docs] or ["__empty__"]
+        concept_texts = [concept_normalize(d.text) or "__empty__" for d in self.docs] or ["__empty__"]
         self.lex_vectorizer = TfidfVectorizer(lowercase=True, token_pattern=r"(?u)\b[\w-]+\b", ngram_range=(1, 2))
         self.lex_matrix = self.lex_vectorizer.fit_transform(texts)
         self.concept_vectorizer = TfidfVectorizer(lowercase=True, token_pattern=r"(?u)\b[\w-]+\b", ngram_range=(1, 2))
