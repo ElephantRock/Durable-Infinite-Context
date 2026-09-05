@@ -28,10 +28,15 @@ def _ngrams(token: str, n: int = 4) -> set[str]:
     return {token[i : i + n] for i in range(len(token) - n + 1)}
 
 
+def _fragments(token: str) -> set[str]:
+    return {part for part in re.split(r"[-_]+", token) if len(part) >= 3}
+
+
 @dataclass(frozen=True)
 class ResolutionTrace:
     total_subjects: int
     token_posting_lookups: int
+    fragment_posting_lookups: int
     ngram_posting_lookups: int
     posting_entries_examined: int
     broad_postings_skipped: int
@@ -43,6 +48,7 @@ class ResolutionTrace:
     def logical_work(self) -> int:
         return (
             self.token_posting_lookups
+            + self.fragment_posting_lookups
             + self.ngram_posting_lookups
             + self.posting_entries_examined
             + self.profiles_scored
@@ -76,14 +82,18 @@ class SubjectProfileIndex:
         self.total_subjects = len(self.profiles)
 
         token_postings: dict[str, list[str]] = defaultdict(list)
+        fragment_postings: dict[str, list[str]] = defaultdict(list)
         ngram_postings: dict[str, list[str]] = defaultdict(list)
         for subject_id, profile in self.profiles.items():
             for token in profile:
                 token_postings[token].append(subject_id)
+                for fragment in _fragments(token):
+                    fragment_postings[fragment].append(subject_id)
                 for gram in _ngrams(token):
                     ngram_postings[gram].append(subject_id)
 
         self.token_postings = {k: tuple(sorted(v)) for k, v in token_postings.items()}
+        self.fragment_postings = {k: tuple(sorted(v)) for k, v in fragment_postings.items()}
         self.ngram_postings = {k: tuple(sorted(v)) for k, v in ngram_postings.items()}
 
         n = max(self.total_subjects, 1)
@@ -152,6 +162,7 @@ class ScalableQueryPlanner:
         q_tokens = [t for t in _tokens(question) if t not in _STOP]
         candidate_scores: Counter[str] = Counter()
         token_lookups = 0
+        fragment_lookups = 0
         ngram_lookups = 0
         entries_examined = 0
         broad_skipped = 0
@@ -159,6 +170,13 @@ class ScalableQueryPlanner:
 
         def eligible(subject_id: str) -> bool:
             return predicate is None or predicate in self.index.subject_predicates.get(subject_id, set())
+
+        def consume(posting: tuple[str, ...], weight: float) -> None:
+            nonlocal entries_examined
+            entries_examined += len(posting)
+            for subject_id in posting:
+                if eligible(subject_id):
+                    candidate_scores[subject_id] += weight
 
         # Exact token postings are the highest-precision candidate source. Common
         # aliases/predicate words are detected by posting cardinality and skipped.
@@ -173,15 +191,26 @@ class ScalableQueryPlanner:
                 broad_skipped += 1
                 saw_broad = True
                 continue
-            entries_examined += len(posting)
-            weight = self.index.idf.get(token, 1.0)
-            for subject_id in posting:
-                if eligible(subject_id):
-                    candidate_scores[subject_id] += 4.0 * weight
+            consume(posting, 4.0 * self.index.idf.get(token, 1.0))
 
-        # Fuzzy rescue is only used for query tokens with no exact posting. Four-
-        # gram postings tolerate small alias/descriptor typos without scanning all
-        # profiles. Broad grams are skipped by the same cardinality guard.
+        # For a misspelled compound alias such as `Atals-0001234`, separator
+        # fragments preserve exact identity-bearing subparts even when the lexical
+        # token and some character grams are corrupted. This is a general normalized
+        # sub-token address channel, not a special case for a particular alias.
+        for token in missing_tokens:
+            for fragment in _fragments(token):
+                fragment_lookups += 1
+                posting = self.index.fragment_postings.get(fragment, ())
+                if not posting:
+                    continue
+                if len(posting) > self.broad_posting_limit:
+                    broad_skipped += 1
+                    saw_broad = True
+                    continue
+                consume(posting, 3.0)
+
+        # Fuzzy rescue is used for remaining lexical misses. Four-gram postings
+        # tolerate small alias/descriptor typos without scanning all profiles.
         for token in missing_tokens:
             for gram in _ngrams(token):
                 ngram_lookups += 1
@@ -192,16 +221,14 @@ class ScalableQueryPlanner:
                     broad_skipped += 1
                     saw_broad = True
                     continue
-                entries_examined += len(posting)
-                for subject_id in posting:
-                    if eligible(subject_id):
-                        candidate_scores[subject_id] += 1.0
+                consume(posting, 1.0)
 
         ranked = sorted(candidate_scores.items(), key=lambda x: (-x[1], x[0]))
         candidates = [subject_id for subject_id, _ in ranked[: self.candidate_limit]]
         trace = ResolutionTrace(
             total_subjects=self.index.total_subjects,
             token_posting_lookups=token_lookups,
+            fragment_posting_lookups=fragment_lookups,
             ngram_posting_lookups=ngram_lookups,
             posting_entries_examined=entries_examined,
             broad_postings_skipped=broad_skipped,
@@ -231,7 +258,8 @@ class ScalableQueryPlanner:
             for token in q_tokens:
                 if token in profile:
                     exact_score += self.index.idf.get(token, 1.0) * (1.0 + math.log(profile[token]))
-            # Candidate-generation score carries typo evidence into final ranking.
+            # Candidate-generation score carries fuzzy/sub-token evidence into final
+            # ranking while exact lexical overlap remains dominant.
             score = exact_score + 0.1 * generation_scores.get(subject_id, 0.0)
             scored.append((score, subject_id))
 
@@ -241,9 +269,6 @@ class ScalableQueryPlanner:
         if len(tied) > 1:
             return None, tied, 0.0, trace
 
-        # If the only signal was a broad posting, resolving would be unsafe. In
-        # practice broad postings were skipped, so this protects future changes to
-        # candidate generation as well.
         if top_score <= 0 and saw_broad:
             return None, (), 0.0, trace
 
