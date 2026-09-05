@@ -12,6 +12,7 @@ class CascadeMeasurement:
     operation: str
     invalidated_nodes: int
     rebuilt_nodes: int
+    retired_nodes: int
     invalidation_work: int
     rebuild_work: int
     incremental_work: int
@@ -80,6 +81,7 @@ def measure_cascade(
         operation=operation,
         invalidated_nodes=invalidated_nodes,
         rebuilt_nodes=rebuild_trace.nodes_rebuilt,
+        retired_nodes=rebuild_trace.nodes_retired,
         invalidation_work=invalidation_trace.logical_work,
         rebuild_work=rebuild_trace.logical_work,
         incremental_work=incremental_work,
