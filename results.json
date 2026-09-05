@@ -1,0 +1,60 @@
+{
+  "scenarios": 750,
+  "queries": 2500,
+  "results": [
+    {
+      "architecture": "evidence_recency_control",
+      "total": 2500,
+      "value_correct": 2000,
+      "status_correct": 2000,
+      "exact_correct": 1500,
+      "overclaims": 500,
+      "relation_total": 500,
+      "relation_correct": 0,
+      "provenance_total": 500,
+      "provenance_correct": 250,
+      "value_accuracy": 0.8,
+      "status_accuracy": 0.8,
+      "relation_accuracy": 0.0,
+      "provenance_accuracy": 0.5,
+      "exact_accuracy": 0.6,
+      "overclaim_rate": 0.2
+    },
+    {
+      "architecture": "assertions_on_demand",
+      "total": 2500,
+      "value_correct": 2500,
+      "status_correct": 2500,
+      "exact_correct": 2500,
+      "overclaims": 0,
+      "relation_total": 500,
+      "relation_correct": 500,
+      "provenance_total": 500,
+      "provenance_correct": 500,
+      "value_accuracy": 1.0,
+      "status_accuracy": 1.0,
+      "relation_accuracy": 1.0,
+      "provenance_accuracy": 1.0,
+      "exact_accuracy": 1.0,
+      "overclaim_rate": 0.0
+    },
+    {
+      "architecture": "persistent_state",
+      "total": 2500,
+      "value_correct": 2500,
+      "status_correct": 2500,
+      "exact_correct": 2500,
+      "overclaims": 0,
+      "relation_total": 500,
+      "relation_correct": 500,
+      "provenance_total": 500,
+      "provenance_correct": 500,
+      "value_accuracy": 1.0,
+      "status_accuracy": 1.0,
+      "relation_accuracy": 1.0,
+      "provenance_accuracy": 1.0,
+      "exact_accuracy": 1.0,
+      "overclaim_rate": 0.0
+    }
+  ]
+}
