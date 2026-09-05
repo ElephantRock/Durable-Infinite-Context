@@ -25,6 +25,23 @@ class MemoryStore:
         default_factory=lambda: defaultdict(list), repr=False
     )
 
+    def __post_init__(self) -> None:
+        # The locality structures are rebuildable derivations of canonical public
+        # fields. Rehydrate them unconditionally so constructing/restoring a store
+        # with pre-populated assertions/relations cannot yield an empty stale index.
+        self.rebuild_locality_indexes()
+
+    def rebuild_locality_indexes(self) -> None:
+        self._assertions_by_key = defaultdict(set)
+        self._assertions_by_subject = defaultdict(set)
+        self._evidence_subject_refcounts = defaultdict(lambda: defaultdict(int))
+        self._relations_by_source = defaultdict(list)
+
+        for item in self.assertions.values():
+            self._add_assertion_indexes(item)
+        for rel in self.relations:
+            self._relations_by_source[rel.source_assertion_id].append(rel)
+
     def add_evidence(self, item: EvidenceRecord) -> None:
         # Evidence IDs are stable logical addresses. Reusing an ID is therefore an
         # in-place version replacement from the perspective of this prototype.
@@ -86,10 +103,13 @@ class MemoryStore:
         self._relations_by_source[rel.source_assertion_id].append(rel)
 
     def assertions_for_key(self, key: tuple[str, str, str]) -> list[Assertion]:
-        # The logical store is indexed by state key. This avoids conflating the
-        # architecture experiment with an avoidable full-store scan.
+        # Set-backed locality indexes need a deterministic secondary ordering key;
+        # otherwise equal recorded_seq values can vary with Python hash seed.
         ids = self._assertions_by_key.get(key, set())
-        return sorted((self.assertions[aid] for aid in ids), key=lambda a: a.recorded_seq)
+        return sorted(
+            (self.assertions[aid] for aid in ids),
+            key=lambda a: (a.recorded_seq, a.id),
+        )
 
     def assertions_for_subject(self, subject_id: str) -> list[Assertion]:
         ids = self._assertions_by_subject.get(subject_id, set())
