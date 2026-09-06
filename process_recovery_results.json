@@ -1,0 +1,100 @@
+{
+  "experiment": "v0.9_persistent_wal_process_crash_recovery",
+  "storage": {
+    "engine": "sqlite3",
+    "journal_mode": "wal",
+    "synchronous": "FULL",
+    "process_failure": "SIGKILL"
+  },
+  "phase_matrix_entity_count": 100,
+  "operations": [
+    "replace_evidence_payload",
+    "replace_assertion_object",
+    "delete_assertion"
+  ],
+  "failpoints": [
+    "prepared_committed",
+    "canonical_uncommitted",
+    "canonical_committed",
+    "invalidation_uncommitted",
+    "invalidated_committed",
+    "partial_rebuild_uncommitted",
+    "partial_rebuild_committed",
+    "repair_uncommitted",
+    "repaired_committed",
+    "finalize_uncommitted",
+    "finalized_committed"
+  ],
+  "phase_fields": [
+    "operation",
+    "failpoint",
+    "durable_phase",
+    "canonical_visible",
+    "journal_rows",
+    "invalid_nodes",
+    "rebuilding_nodes",
+    "read_blocked",
+    "canonical_mutations",
+    "recovery_work",
+    "full_rebuild_work"
+  ],
+  "phase_rows": [
+    ["replace_evidence_payload","prepared_committed","prepared",false,1,0,0,true,1,38,1400],
+    ["replace_evidence_payload","canonical_uncommitted","prepared",false,1,0,0,true,1,38,1400],
+    ["replace_evidence_payload","canonical_committed","canonical_applied",true,1,0,0,true,0,36,1400],
+    ["replace_evidence_payload","invalidation_uncommitted","canonical_applied",true,1,0,0,true,0,36,1400],
+    ["replace_evidence_payload","invalidated_committed","invalidated",true,1,3,0,true,0,29,1400],
+    ["replace_evidence_payload","partial_rebuild_uncommitted","invalidated",true,1,3,0,true,0,29,1400],
+    ["replace_evidence_payload","partial_rebuild_committed","rebuilding",true,1,3,1,true,0,32,1400],
+    ["replace_evidence_payload","repair_uncommitted","rebuilding",true,1,3,1,true,0,32,1400],
+    ["replace_evidence_payload","repaired_committed","repaired",true,1,0,0,true,0,2,1400],
+    ["replace_evidence_payload","finalize_uncommitted","repaired",true,1,0,0,true,0,2,1400],
+    ["replace_evidence_payload","finalized_committed",null,true,0,0,0,false,0,0,1400],
+    ["replace_assertion_object","prepared_committed","prepared",false,1,0,0,true,1,35,1400],
+    ["replace_assertion_object","canonical_uncommitted","prepared",false,1,0,0,true,1,35,1400],
+    ["replace_assertion_object","canonical_committed","canonical_applied",true,1,0,0,true,0,33,1400],
+    ["replace_assertion_object","invalidation_uncommitted","canonical_applied",true,1,0,0,true,0,33,1400],
+    ["replace_assertion_object","invalidated_committed","invalidated",true,1,3,0,true,0,26,1400],
+    ["replace_assertion_object","partial_rebuild_uncommitted","invalidated",true,1,3,0,true,0,26,1400],
+    ["replace_assertion_object","partial_rebuild_committed","rebuilding",true,1,3,1,true,0,29,1400],
+    ["replace_assertion_object","repair_uncommitted","rebuilding",true,1,3,1,true,0,29,1400],
+    ["replace_assertion_object","repaired_committed","repaired",true,1,0,0,true,0,2,1400],
+    ["replace_assertion_object","finalize_uncommitted","repaired",true,1,0,0,true,0,2,1400],
+    ["replace_assertion_object","finalized_committed",null,true,0,0,0,false,0,0,1400],
+    ["delete_assertion","prepared_committed","prepared",false,1,0,0,true,1,35,1387],
+    ["delete_assertion","canonical_uncommitted","prepared",false,1,0,0,true,1,35,1387],
+    ["delete_assertion","canonical_committed","canonical_applied",true,1,0,0,true,0,33,1387],
+    ["delete_assertion","invalidation_uncommitted","canonical_applied",true,1,0,0,true,0,33,1387],
+    ["delete_assertion","invalidated_committed","invalidated",true,1,4,0,true,0,24,1387],
+    ["delete_assertion","partial_rebuild_uncommitted","invalidated",true,1,4,0,true,0,24,1387],
+    ["delete_assertion","partial_rebuild_committed","rebuilding",true,1,4,1,true,0,28,1387],
+    ["delete_assertion","repair_uncommitted","rebuilding",true,1,4,1,true,0,28,1387],
+    ["delete_assertion","repaired_committed","repaired",true,1,0,0,true,0,2,1387],
+    ["delete_assertion","finalize_uncommitted","repaired",true,1,0,0,true,0,2,1387],
+    ["delete_assertion","finalized_committed",null,true,0,0,0,false,0,0,1387]
+  ],
+  "locality_fields": [
+    "entity_count",
+    "recovery_work",
+    "reinvalidated_nodes",
+    "retired_nodes",
+    "full_rebuild_work"
+  ],
+  "locality_rows": [
+    [100,28,4,4,1387],
+    [1000,28,4,4,13987],
+    [10000,28,4,4,139987],
+    [50000,28,4,4,699987]
+  ],
+  "required_true": [
+    "materialization_equal",
+    "semantic_check",
+    "all_derived_fresh",
+    "journal_empty",
+    "dependency_lookup_uses_index",
+    "affected_traversal_uses_index",
+    "transaction_boundary_correct"
+  ],
+  "invariant": "transactional persistent intent plus atomic canonical/phase commit plus indexed affected-region invalidation must recover in a fresh process without stale reads or recovery work proportional to unrelated total memory",
+  "scope": "single SQLite database in WAL mode with synchronous=FULL; one in-flight writer; local filesystem process-crash experiment; no distributed or concurrent-writer claim"
+}
