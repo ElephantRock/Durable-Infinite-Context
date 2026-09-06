@@ -9,6 +9,7 @@ from simulator.predicate_schema import (
     run_predicate_locality_case,
     run_v012_predicate_control,
     run_v013_predicate_addition,
+    run_v013_predicate_removal,
     run_v013_predicate_replacement,
 )
 from storage.predicate_schema import PredicateSchemaAwareStore
@@ -36,6 +37,7 @@ class PredicateSchemaTests(unittest.TestCase):
         self.assertTrue(case["materialization_equal"])
         self.assertTrue(case["all_derived_fresh"])
         self.assertTrue(case["profile_lookup_uses_index"])
+        self.assertEqual(case["recovery_trace"]["logical_work"], case["recovery_work"])
 
     def test_v013_profile_aggregates_two_live_predicates(self):
         case = run_v013_predicate_addition(entity_count=48, index=30)
@@ -46,6 +48,21 @@ class PredicateSchemaTests(unittest.TestCase):
         self.assertEqual(case["profile_predicates"], ["deadline", "launch_date"])
         self.assertEqual(case["subject_derived_count"], 7)
         self.assertEqual(case["queue_final"]["done"], 2)
+        self.assertEqual(case["queue_final"]["conflict"], 0)
+        self.assertTrue(case["materialization_equal"])
+        self.assertTrue(case["all_derived_fresh"])
+        self.assertTrue(case["profile_lookup_uses_index"])
+
+    def test_v013_removing_one_predicate_keeps_profile_for_remaining_predicate(self):
+        case = run_v013_predicate_removal(entity_count=48, index=30)
+        self.assertFalse(case["deadline_assertion_present"])
+        self.assertTrue(case["added_assertion_present"])
+        self.assertFalse(case["deadline_context_present"])
+        self.assertTrue(case["new_context_present"])
+        self.assertTrue(case["profile_present"])
+        self.assertEqual(case["profile_predicates"], ["launch_date"])
+        self.assertEqual(case["subject_derived_count"], 4)
+        self.assertEqual(case["queue_final"]["done"], 3)
         self.assertEqual(case["queue_final"]["conflict"], 0)
         self.assertTrue(case["materialization_equal"])
         self.assertTrue(case["all_derived_fresh"])
