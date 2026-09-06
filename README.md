@@ -193,12 +193,12 @@ The corrected fixed one-move workload produced:
 
 | Entities | Recovery work | Full rebuild |
 |---:|---:|---:|
-| 100 | **72** | 1,400 |
-| 1,000 | **72** | 14,000 |
-| 10,000 | **72** | 140,000 |
-| 50,000 | **72** | 700,000 |
+| 100 | **76** | 1,400 |
+| 1,000 | **76** | 14,000 |
+| 10,000 | **76** | 140,000 |
+| 50,000 | **76** | 700,000 |
 
-At N=64 the corrected target has exactly four materializations—profile, state, support, and context—and exact clean-rebuild parity is restored.
+At N=64 the corrected target has exactly four materializations—profile, state, support, and context—and exact clean-rebuild parity is restored. The initial 72-operation artifact omitted the four deterministic output-existence probes; `RESULTS_V0.12.md` records that measurement correction explicitly.
 
 See `RESULTS_V0.12.md`, `growth_results.json`, and `verify_growth_results.py`.
 
