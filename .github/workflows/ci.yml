@@ -25,6 +25,7 @@ jobs:
       - run: python verify_process_recovery_results.py
       - run: python verify_multi_intent_results.py
       - run: python verify_topology_results.py
+      - run: python run_growth_experiment.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -39,4 +40,9 @@ jobs:
         with:
           name: v0.11-topology-results
           path: topology_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.12-growth-results
+          path: growth_results.json
           if-no-files-found: error
