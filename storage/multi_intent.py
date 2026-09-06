@@ -404,9 +404,14 @@ class MultiIntentStore(PersistentProcessStore):
         }
 
     def read_context(self, subject: str, predicate: str = "deadline") -> str | None:
-        """Block only reads whose derived target can be stale in the active phase."""
+        """Read one coherent SQLite snapshot and block if that snapshot can be stale."""
 
         with self.connect() as conn:
+            # Python's sqlite3 autocommit mode does not keep separate SELECTs in
+            # one read transaction. Pin phase/read-key inspection and derived
+            # lookup to one WAL snapshot so an intervening maintenance commit
+            # cannot expose a transient invalidated/rebuilding representation.
+            conn.execute("BEGIN")
             intent = conn.execute(
                 "SELECT * FROM maintenance_journal ORDER BY intent_id LIMIT 1"
             ).fetchone()
