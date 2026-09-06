@@ -141,15 +141,15 @@ The old `ScanFreeCascadeMaintainer` name remains only as a compatibility subclas
 
 ## Validation status
 
-The redo-safe head passed in GitHub Actions through:
+The redo-safe branch has already demonstrated:
 
-- **60/60 unit tests**;
-- v0.4 planner regression;
-- v0.5 scalable-resolution regression;
-- v0.6 maintenance regression;
+- **60/60 unit tests** passing;
+- v0.4 planner regression passing;
+- v0.5 scalable-resolution regression passing;
+- v0.6 maintenance regression passing;
 - scan-free reproduction of the recorded v0.7 ledger.
 
-The recovery verifier then intentionally rejected the old pre-redo ledger at the first changed row:
+Before the redo ledger was updated, the recovery verifier correctly rejected the old measurement at the first changed row:
 
 ```text
 ('replace_evidence_payload', 'canonical_applied').recovery_work:
@@ -166,7 +166,7 @@ The final verifier additionally requires:
 - equality of every recorded measurement field;
 - all required safety/correctness booleans true.
 
-The final PR head must reproduce both the v0.7 compact ledger through the canonical scan-free path and this v0.8 redo-safe ledger before merge.
+**Merge criterion:** the exact final PR head must pass the complete CI chain and reproduce both the v0.7 compact ledger through the canonical scan-free path and the v0.8 redo-safe ledger. No result is considered final before that exact-head gate is green.
 
 ## What the evidence supports
 
