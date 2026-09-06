@@ -30,17 +30,21 @@ def run() -> dict:
                 },
             )
 
-    # Transactional-storage prediction: an uncommitted canonical transaction must
-    # recover from PREPARED and apply once; a committed canonical transaction must
-    # be trusted without a redundant redo because canonical data + phase marker
-    # committed atomically.
+    # The canonical mutation and CANONICAL_APPLIED marker share one SQLite
+    # transaction. Recovery applies the canonical operation exactly once only when
+    # the durable phase is still PREPARED; every later durable phase must trust the
+    # committed canonical transaction and perform zero redundant canonical writes.
+    canonical_apply_on_recovery = {"prepared_committed", "canonical_uncommitted"}
     for row in phase_rows:
-        if row["failpoint"] == "canonical_uncommitted":
-            if row["recovery_trace"]["canonical_mutations"] != 1:
-                raise AssertionError("uncommitted canonical transaction did not recover via one apply")
-        if row["failpoint"] in {"canonical_committed", "invalidation_uncommitted"}:
-            if row["recovery_trace"]["canonical_mutations"] != 0:
-                raise AssertionError("committed canonical transaction was redundantly replayed")
+        expected_mutations = 1 if row["failpoint"] in canonical_apply_on_recovery else 0
+        if row["recovery_trace"]["canonical_mutations"] != expected_mutations:
+            raise AssertionError(
+                f"canonical recovery mutation mismatch for {row['failpoint']}: "
+                f"expected {expected_mutations}, observed "
+                f"{row['recovery_trace']['canonical_mutations']}"
+            )
+        if row["failpoint"] == "finalized_committed" and row["recovery_work"] != 0:
+            raise AssertionError("fully finalized transaction unexpectedly required recovery work")
 
     locality_rows: list[dict] = []
     for entity_count in (100, 1_000, 10_000, 50_000):
