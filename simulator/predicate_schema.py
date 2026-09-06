@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Type
 
-from simulator.cascade import subject_id
+from simulator.cascade import assertion_id, subject_id
 from storage.predicate_schema import (
     PredicateMutationControlStore,
     PredicateSchemaAwareStore,
@@ -68,6 +68,7 @@ def _run_predicate_replacement_case(
             "queue_final": queue,
             "semantic_check": canonical_changed and queue["done"] == 1 and queue["conflict"] == 0,
             "materialization_equal": store.materialization_matches_clean_rebuild(),
+            "recovery_trace": trace.to_dict(),
             "recovery_work": trace.logical_work,
             "full_rebuild_work": store.full_rebuild_work(),
             "all_derived_fresh": store.all_derived_fresh(),
@@ -152,6 +153,75 @@ def run_v013_predicate_addition(
             "subject_derived_count": store.subject_derived_count(subject),
             "queue_final": store.queue_counts(),
             "drain": drained,
+            "materialization_equal": store.materialization_matches_clean_rebuild(),
+            "full_rebuild_work": store.full_rebuild_work(),
+            "all_derived_fresh": store.all_derived_fresh(),
+            "profile_lookup_uses_index": store.subject_profile_lookup_uses_index(subject),
+        }
+
+
+def run_v013_predicate_removal(
+    entity_count: int = 64,
+    index: int = 40,
+    new_predicate: str = "launch_date",
+    value: int = 55,
+) -> dict[str, Any]:
+    """Delete one of two live predicates without retiring the subject-wide profile."""
+
+    if index >= entity_count:
+        raise ValueError("index must refer to an existing bootstrap assertion")
+
+    subject = subject_id(index)
+    with tempfile.TemporaryDirectory(prefix="dic-v013-predicate-remove-") as tmp:
+        store = PredicateSchemaAwareStore(Path(tmp) / "memory.sqlite3")
+        store.bootstrap(entity_count)
+        admitted = store.enqueue_predicate_addition(
+            index,
+            new_predicate,
+            value=value,
+            writer="predicate-removal-setup",
+        )
+        addition_drain = store.drain_all()
+        if store.profile_snapshot(subject) is None:
+            raise AssertionError("predicate-removal setup did not create subject profile")
+
+        store.enqueue_operation("delete_assertion", index, writer="predicate-removal")
+        removal_drain = store.drain_all()
+        profile = store.profile_snapshot(subject)
+
+        with store.connect() as conn:
+            deadline_assertion_present = (
+                conn.execute(
+                    "SELECT 1 FROM assertions WHERE id=?",
+                    (assertion_id(index),),
+                ).fetchone()
+                is not None
+            )
+            added_assertion_present = (
+                conn.execute(
+                    "SELECT 1 FROM assertions WHERE id=?",
+                    (admitted["assertion_id"],),
+                ).fetchone()
+                is not None
+            )
+
+        return {
+            "store": type(store).__name__,
+            "entity_count": entity_count,
+            "index": index,
+            "subject_id": subject,
+            "removed_predicate": "deadline",
+            "remaining_predicate": new_predicate,
+            "deadline_assertion_present": deadline_assertion_present,
+            "added_assertion_present": added_assertion_present,
+            "deadline_context_present": store.read_context(subject, "deadline") is not None,
+            "new_context_present": store.read_context(subject, new_predicate) is not None,
+            "profile_present": profile is not None,
+            "profile_predicates": [] if profile is None else list(profile.get("predicates", [])),
+            "subject_derived_count": store.subject_derived_count(subject),
+            "queue_final": store.queue_counts(),
+            "addition_drain": addition_drain,
+            "removal_drain": removal_drain,
             "materialization_equal": store.materialization_matches_clean_rebuild(),
             "full_rebuild_work": store.full_rebuild_work(),
             "all_derived_fresh": store.all_derived_fresh(),
