@@ -27,6 +27,7 @@ jobs:
       - run: python verify_topology_results.py
       - run: python verify_growth_results.py
       - run: python verify_predicate_schema_results.py
+      - run: python verify_subject_fanout_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -51,4 +52,9 @@ jobs:
         with:
           name: v0.13-predicate-schema-results
           path: predicate_schema_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.14-subject-fanout-results
+          path: subject_fanout_results.json
           if-no-files-found: error
