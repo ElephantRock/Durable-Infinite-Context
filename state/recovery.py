@@ -67,16 +67,18 @@ class RecoveryTrace:
 
 
 class RecoveryCoordinator:
-    """Single-flight durable maintenance protocol for the v0.8 falsification test.
+    """Single-flight redo journal for the v0.8 falsification test.
 
-    The journal intent is durable *before* a canonical mutation. A restarted process
-    must drain this journal before serving derived reads. This means a crash after a
-    canonical write but before descendant invalidation cannot expose the old derived
-    value as if it were still fresh.
+    The intent is durable before the canonical mutation. Restart drains the journal
+    before derived reads are admitted. Canonical operations are deliberately
+    idempotent (`upsert` by ID or delete-if-present), so recovery can redo a
+    `CANONICAL_APPLIED` intent before invalidation. This closes both torn boundaries:
 
-    The prototype deliberately models durability with a deep-copied durable image;
-    it does not claim filesystem/database atomicity. Recovery work is restricted to
-    node IDs carried by the intent rather than discovered by a global graph scan.
+    - canonical write durable while PREPARED marker remains: replay is harmless;
+    - CANONICAL_APPLIED marker durable while canonical write is lost: replay repairs it.
+
+    The prototype still models persistence with a deep-copied durable image; it does
+    not claim filesystem/database atomicity or concurrent-writer semantics.
     """
 
     _ids = count(1)
@@ -123,6 +125,12 @@ class RecoveryCoordinator:
         ))
 
     def _apply_canonical(self, intent: MaintenanceIntent) -> None:
+        """Apply a redo-safe canonical mutation.
+
+        Every operation represented by the v0.8 journal is idempotent by stable ID:
+        evidence/assertion writes replace the same ID, and deletion is delete-if-present.
+        """
+
         if intent.operation == MaintenanceOperation.UPSERT_EVIDENCE:
             if intent.evidence is None:
                 raise ValueError("Evidence intent missing payload")
@@ -200,12 +208,7 @@ class RecoveryCoordinator:
         self,
         intent: MaintenanceIntent,
     ) -> DependencyTrace:
-        """Persist one derived write while leaving its lifecycle as REBUILDING.
-
-        This models a crash after a materialization/lineage write but before the
-        fresh marker is durably committed. Recovery must treat that write as
-        untrusted and reconstruct it idempotently from canonical state.
-        """
+        """Persist one derived write while leaving its lifecycle as REBUILDING."""
 
         candidates = [
             node_id for node_id in intent.affected_node_ids
@@ -236,8 +239,6 @@ class RecoveryCoordinator:
         else:
             raise KeyError(f"Unknown derived node kind for partial rebuild: {kind}")
 
-        # The rebuild helper re-registers the node with REBUILDING status. Do not
-        # mark it fresh: this is the crash boundary under test.
         intent.partial_rebuild_node_id = node_id
         return trace
 
@@ -245,9 +246,12 @@ class RecoveryCoordinator:
         self,
         intent_id: str,
         stop_after: MaintenancePhase | None = None,
+        *,
+        recovery_mode: bool = False,
     ) -> RecoveryTrace:
         intent = self.journal[intent_id]
         trace = RecoveryTrace(journal_reads=1)
+        canonical_applied_this_call = False
 
         if stop_after == MaintenancePhase.PREPARED:
             return trace
@@ -255,12 +259,19 @@ class RecoveryCoordinator:
         if intent.phase == MaintenancePhase.PREPARED:
             self._apply_canonical(intent)
             trace.canonical_mutations += 1
+            canonical_applied_this_call = True
             intent.phase = MaintenancePhase.CANONICAL_APPLIED
             trace.journal_writes += 1
         if stop_after == MaintenancePhase.CANONICAL_APPLIED:
             return trace
 
         if intent.phase == MaintenancePhase.CANONICAL_APPLIED:
+            # On process recovery, the phase marker and canonical record may have
+            # torn independently. Redo the idempotent canonical operation unless
+            # this same call just applied it from PREPARED.
+            if recovery_mode and not canonical_applied_this_call:
+                self._apply_canonical(intent)
+                trace.canonical_mutations += 1
             trace.invalidation.absorb(self._invalidate(intent))
             intent.phase = MaintenancePhase.INVALIDATED
             trace.journal_writes += 1
@@ -268,16 +279,12 @@ class RecoveryCoordinator:
             return trace
 
         if stop_after == MaintenancePhase.REBUILDING and intent.phase == MaintenancePhase.INVALIDATED:
-            # Partial derived work is deliberately not part of post-crash recovery
-            # cost, but it is persisted in the durable image presented to recovery.
             self._simulate_durable_partial_rebuild(intent)
             intent.phase = MaintenancePhase.REBUILDING
             trace.journal_writes += 1
             return trace
 
         if intent.phase == MaintenancePhase.REBUILDING:
-            # A REBUILDING node may contain an arbitrarily partial materialization.
-            # Re-invalidate only the affected nodes named by the durable intent.
             trace.reinvalidation.absorb(
                 self.graph.invalidate_nodes(intent.affected_node_ids)
             )
@@ -301,7 +308,7 @@ class RecoveryCoordinator:
     def recover_all(self) -> RecoveryTrace:
         trace = RecoveryTrace(journal_reads=len(self.journal))
         for intent_id in tuple(sorted(self.journal)):
-            trace.absorb(self.run_until(intent_id))
+            trace.absorb(self.run_until(intent_id, recovery_mode=True))
         return trace
 
     def read_context(self, key: tuple[str, str, str]) -> str | None:
