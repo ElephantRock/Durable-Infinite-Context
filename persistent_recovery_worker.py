@@ -35,9 +35,12 @@ def crash(store: PersistentProcessStore, operation: str, index: int, failpoint: 
         abrupt_kill()
 
     if failpoint == "canonical_uncommitted":
-        # Leave a real SQLite write transaction open. SIGKILL must cause WAL
-        # recovery to discard both the canonical write and its phase advance.
-        store.begin_canonical_without_commit()
+        # Keep the connection strongly referenced until SIGKILL. Otherwise CPython
+        # could close the unused temporary and perform an ordinary rollback before
+        # the process actually dies, invalidating the failpoint.
+        open_transaction = store.begin_canonical_without_commit()
+        if not open_transaction.in_transaction:
+            raise AssertionError("canonical failpoint does not hold a live transaction")
         abrupt_kill()
 
     store.apply_canonical_transaction()
@@ -45,9 +48,9 @@ def crash(store: PersistentProcessStore, operation: str, index: int, failpoint: 
         abrupt_kill()
 
     if failpoint == "invalidation_uncommitted":
-        # Canonical transaction is durable, but invalidation + phase advance are
-        # deliberately killed before their transaction commits.
-        store.begin_invalidation_without_commit()
+        open_transaction = store.begin_invalidation_without_commit()
+        if not open_transaction.in_transaction:
+            raise AssertionError("invalidation failpoint does not hold a live transaction")
         abrupt_kill()
 
     store.invalidate_transaction()
