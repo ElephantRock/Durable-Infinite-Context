@@ -86,10 +86,18 @@ This proves that `all derived rows are fresh` is not a sufficient completeness i
 - old subject retired: **true**;
 - all derived nodes fresh: **true**;
 - clean-rebuild parity: **true**;
-- recovery work: **72**;
+- recovery work: **76**;
 - full-rebuild control: **896**.
 
 The four created outputs are the target subject's profile, state, support, and context materializations.
+
+### Measurement correction
+
+The first v0.12 experiment artifact reported **72** logical recovery operations. Audit found that the four deterministic primary-key probes used to determine which required outputs were missing were not included in `PersistentRecoveryTrace.logical_work`.
+
+The mechanism was not changed. The instrumentation was corrected so each required-output existence probe counts as one derived lookup. The corrected result is therefore **76** logical operations for the fixed four-output obligation.
+
+This correction is intentionally preserved in the result history rather than silently replacing the earlier measurement.
 
 ## Locality
 
@@ -97,15 +105,15 @@ The same one-move topology-growth workload was run while unrelated cardinality i
 
 | Entities | Recovery work | Full rebuild |
 |---:|---:|---:|
-| 100 | **72** | 1,400 |
-| 1,000 | **72** | 14,000 |
-| 10,000 | **72** | 140,000 |
-| 50,000 | **72** | 700,000 |
+| 100 | **76** | 1,400 |
+| 1,000 | **76** | 14,000 |
+| 10,000 | **76** | 140,000 |
+| 50,000 | **76** | 700,000 |
 
 For this fixed output-obligation workload:
 
 \[
-RecoveryWork(1,N)=72
+RecoveryWork(1,N)=76
 \]
 
 through 50,000 entities under the benchmark's logical-work accounting.
