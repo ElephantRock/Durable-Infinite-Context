@@ -64,8 +64,14 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
         self,
         conn: sqlite3.Connection,
         intent: sqlite3.Row,
+        trace: PersistentRecoveryTrace | None = None,
     ) -> list[tuple[str, str, str, str | None]]:
-        """Return only required outputs that are actually absent at invalidation."""
+        """Return only required outputs that are actually absent at invalidation.
+
+        Each deterministic primary-key existence probe is counted as one logical
+        derived lookup. The first v0.12 measurement omitted these probes even though
+        they were local/indexed; counting them keeps the work ledger mechanism-complete.
+        """
 
         missing: list[tuple[str, str, str, str | None]] = []
         for spec in self._candidate_growth_specs(intent):
@@ -74,6 +80,8 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
                 "SELECT 1 FROM derived_nodes WHERE node_id=?",
                 (node_id,),
             ).fetchone()
+            if trace is not None:
+                trace.derived_rows_read += 1
             if row is None:
                 missing.append(spec)
         return missing
@@ -122,7 +130,7 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
     ) -> list[str]:
         # Capture missing obligations before inserting them; once inserted, a second
         # lookup would correctly report that nothing is missing and lose the set.
-        growth_specs = self._growth_specs_tx(conn, intent)
+        growth_specs = self._growth_specs_tx(conn, intent, trace)
         existing_region = super()._affected_nodes(conn, intent)
         affected = sorted(
             set(existing_region).union(node_id for node_id, _, _, _ in growth_specs)
