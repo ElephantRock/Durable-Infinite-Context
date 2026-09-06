@@ -25,7 +25,7 @@ jobs:
       - run: python verify_process_recovery_results.py
       - run: python verify_multi_intent_results.py
       - run: python verify_topology_results.py
-      - run: python run_growth_experiment.py
+      - run: python verify_growth_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
