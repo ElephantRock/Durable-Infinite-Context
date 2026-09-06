@@ -188,6 +188,32 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(second.logical_work, 0)
         self._assert_recovered(restarted)
 
+    def test_recovery_path_does_not_scan_all_invalid_nodes(self):
+        coordinator = self._coordinator(256)
+        i = 31
+        old = coordinator.store.assertions[assertion_id(i)]
+        intent_id = coordinator.prepare_upsert_assertion(Assertion(
+            old.id,
+            old.subject_id,
+            old.predicate,
+            99,
+            old.recorded_seq,
+            valid_from=old.valid_from,
+            valid_to=old.valid_to,
+            evidence_ids=old.evidence_ids,
+        ))
+
+        def forbidden_global_scan():
+            raise AssertionError("recovery performed a whole-graph invalid_nodes scan")
+
+        coordinator.graph.invalid_nodes = forbidden_global_scan  # type: ignore[method-assign]
+        coordinator.run_until(intent_id, MaintenancePhase.REBUILDING)
+        restarted = coordinator.durable_image()
+        restarted.graph.invalid_nodes = forbidden_global_scan  # type: ignore[method-assign]
+        restarted.recover_all()
+        self.assertEqual(restarted.store.state[old.key].operative_values, [99])
+        self.assertEqual(restarted.journal, {})
+
 
 if __name__ == "__main__":
     unittest.main()
