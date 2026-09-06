@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from simulator.multi_intent import (
     run_concurrent_admission_case,
@@ -8,6 +10,7 @@ from simulator.multi_intent import (
     run_phase_aware_read_case,
     run_same_key_conflict_case,
 )
+from storage.multi_intent import MultiIntentStore
 
 
 class MultiIntentTests(unittest.TestCase):
@@ -53,6 +56,16 @@ class MultiIntentTests(unittest.TestCase):
         self.assertEqual(case["queue_final"]["conflict"], 0)
         self.assertTrue(case["semantic_check"])
         self.assertTrue(case["materialization_equal"])
+
+    def test_legacy_direct_prepare_cannot_bypass_queue_versioning(self):
+        with tempfile.TemporaryDirectory(prefix="dic-v010-guard-") as tmp:
+            store = MultiIntentStore(Path(tmp) / "memory.sqlite3")
+            store.bootstrap(8)
+            with self.assertRaisesRegex(RuntimeError, "enqueue_operation"):
+                store.prepare_operation("replace_assertion_object", 2)
+            self.assertEqual(store.queue_counts()["queued"], 0)
+            self.assertTrue(store.journal_empty())
+            self.assertTrue(store.materialization_matches_clean_rebuild())
 
 
 if __name__ == "__main__":
