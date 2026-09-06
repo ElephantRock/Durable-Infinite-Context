@@ -4,14 +4,14 @@ import unittest
 
 from core.models import Assertion, EvidenceRecord
 from simulator.cascade import alias, assertion_id, build_cascade_store, evidence_id, subject_id
-from state.cascade import CascadeMaterialization
+from state.cascade import CascadeMaintainer, CascadeMaterialization
 from state.scanfree_cascade import ScanFreeCascadeMaintainer
 
 
 class ScanFreeCascadeTests(unittest.TestCase):
-    def test_object_update_and_local_rebuild_do_not_scan_global_invalid_set(self):
+    def test_canonical_object_update_and_local_rebuild_do_not_scan_global_invalid_set(self):
         materialization = CascadeMaterialization(build_cascade_store(512))
-        maintainer = ScanFreeCascadeMaintainer(materialization)
+        maintainer = CascadeMaintainer(materialization)
         i = 41
         old = materialization.store.assertions[assertion_id(i)]
 
@@ -34,9 +34,9 @@ class ScanFreeCascadeTests(unittest.TestCase):
         self.assertEqual(trace.nodes_rebuilt, 3)
         self.assertEqual(materialization.store.state[old.key].operative_values, [73])
 
-    def test_evidence_update_returns_exact_affected_ids_without_scan(self):
+    def test_canonical_evidence_update_returns_exact_affected_ids_without_scan(self):
         materialization = CascadeMaterialization(build_cascade_store(512))
-        maintainer = ScanFreeCascadeMaintainer(materialization)
+        maintainer = CascadeMaintainer(materialization)
         i = 43
 
         def forbidden_global_scan():
@@ -54,6 +54,11 @@ class ScanFreeCascadeTests(unittest.TestCase):
         materialization.rebuild(result.invalidated_node_ids)
         key = (subject_id(i), "deadline", "default")
         self.assertIn("Nova", materialization.read_context(key) or "")
+
+    def test_legacy_scanfree_name_is_same_behavior(self):
+        materialization = CascadeMaterialization(build_cascade_store(64))
+        maintainer = ScanFreeCascadeMaintainer(materialization)
+        self.assertIsInstance(maintainer, CascadeMaintainer)
 
 
 if __name__ == "__main__":
