@@ -39,9 +39,6 @@ def crash(store: PersistentProcessStore, operation: str, index: int, failpoint: 
         abrupt_kill()
 
     if failpoint == "canonical_uncommitted":
-        # Keep the connection strongly referenced until SIGKILL. Otherwise CPython
-        # could close the unused temporary and perform an ordinary rollback before
-        # the process actually dies, invalidating the failpoint.
         open_transaction = store.begin_canonical_without_commit()
         if not open_transaction.in_transaction:
             raise AssertionError("canonical failpoint does not hold a live transaction")
@@ -118,6 +115,7 @@ def main() -> None:
         print(json.dumps({
             "settings": store.transaction_settings(),
             "dependency_lookup_uses_index": store.dependency_lookup_uses_index(),
+            "affected_traversal_uses_index": store.affected_traversal_uses_index(),
             "clean": store.materialization_matches_clean_rebuild(),
             "full_rebuild_work": store.full_rebuild_work(),
         }, sort_keys=True))
