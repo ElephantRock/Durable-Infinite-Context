@@ -273,7 +273,9 @@ class CompositionalProfileStore(HeadIndexedPredicateStore):
             value = {
                 "subject_id": subject,
                 "predicates": requested,
-                "evidence_payloads": sorted(evidence_payloads.items()),
+                "evidence_payloads": [
+                    [eid, payload] for eid, payload in sorted(evidence_payloads.items())
+                ],
             }
             return {"value": value, "trace": trace.to_dict()}
 
@@ -317,7 +319,9 @@ class CompositionalProfileStore(HeadIndexedPredicateStore):
             return {
                 "subject_id": subject,
                 "predicates": requested,
-                "evidence_payloads": sorted(payloads.items()),
+                "evidence_payloads": [
+                    [eid, payload] for eid, payload in sorted(payloads.items())
+                ],
             }
 
     def clean_rebuild_digest(self) -> str:
