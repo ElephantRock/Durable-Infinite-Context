@@ -22,3 +22,9 @@ jobs:
       - run: python run_maintenance_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
+      - run: python verify_process_recovery_results.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.9-process-recovery-results
+          path: process_recovery_results.json
+          if-no-files-found: error

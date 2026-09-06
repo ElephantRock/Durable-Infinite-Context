@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.8
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.9
 
 This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
@@ -11,11 +11,13 @@ This repository implements the falsification-first research prototype for the Du
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, dependency-cascade, and crash-recovery workloads.
+- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, dependency-cascade, crash-recovery, and process-crash workloads.
 - Explicit derived lifecycle states: `fresh`, `invalid`, and `rebuilding`.
 - Dependency-aware selective reconstruction and local retirement of unreachable derived metadata.
 - Scan-free affected-region discovery as the canonical cascade-maintenance path.
 - A single-flight durable maintenance-intent prototype with idempotent canonical redo and stale-read blocking during recovery.
+- SQLite WAL / `synchronous=FULL` persistence with actual `SIGKILL` failpoints and fresh-process recovery.
+- Indexed recursive dependency traversal for persistent affected-region discovery.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
@@ -23,7 +25,7 @@ This repository implements the falsification-first research prototype for the Du
 
 The included `evidence_recency_control` is a smoke-control heuristic; it is **not** the strong agentic hybrid-RAG baseline specified by the research design. The repository deliberately does not fake an LLM agent. Plug a real agent into `rag.baselines.AgenticRAGAdapter` for that comparison.
 
-The current recovery experiment still uses an in-memory graph and a deep-copied durable-image simulation. It does **not** yet establish real filesystem/database durability, fsync behavior, process-crash persistence, concurrent/distributed consistency, production storage latency, or real model-extraction maintenance.
+v0.9 establishes a controlled single-writer process-crash result over one SQLite database in WAL mode with `synchronous=FULL`. It does **not** establish hardware power-loss guarantees beyond the storage stack, concurrent-writer correctness, distributed consistency, replica recovery, cold/archive recovery, production storage latency, or real model-extraction maintenance.
 
 ## First experiment
 
@@ -261,7 +263,50 @@ NoStaleRead + LocalIdempotentRecovery
 }
 \]
 
-The final CI verifier requires exact row counts, unique keys, exact ledger key sets, equality of every recorded measurement field, and all safety/correctness booleans true. This is still a simulated durable image, not real storage-engine evidence.
+The final CI verifier requires exact row counts, unique keys, exact ledger key sets, equality of every recorded measurement field, and all safety/correctness booleans true. v0.8 remains a simulated durable-image result; v0.9 tests the corresponding storage/process claim.
+
+## v0.9 — Persistent WAL / real process-crash recovery
+
+v0.9 persists canonical records, derived nodes, dependency edges, and maintenance intent in SQLite and kills a separate worker process with actual `SIGKILL` at transaction boundaries. A fresh process reopens the database and drains recovery.
+
+The controlled storage configuration is SQLite WAL with `synchronous=FULL`. The canonical mutation and `CANONICAL_APPLIED` phase advance share one transaction, allowing the stronger storage substrate to refine v0.8's generic redo rule:
+
+\[
+\boxed{
+Atomic(CanonicalMutation,PhaseAdvance)
+\Rightarrow
+CANONICAL\_APPLIED\ can\ be\ trusted
+}
+\]
+
+The hardened matrix covers three mutation classes across eleven failpoints, for **33 real-SIGKILL cases**. Audit tightened the experiment to require a live open transaction at uncommitted failpoints, exact `-SIGKILL` exit status, mandatory WAL + `synchronous=FULL`, transaction coverage through finalization, and an `INDEXED BY` recursive affected-region walk whose query plan is checked in CI.
+
+All 33 hardened cases passed on GitHub Actions run `34019100562`. At N=100, recovery work is:
+
+| Operation | Prepared | Canonical uncommitted | Canonical committed | Invalidated | Partial committed | Repaired | Finalized |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Evidence payload | 38 | 38 | 36 | 29 | 32 | 2 | 0 |
+| Assertion object | 35 | 35 | 33 | 26 | 29 | 2 | 0 |
+| Delete assertion | 35 | 35 | 33 | 24 | 28 | 2 | 0 |
+
+Uncommitted invalidation, partial-rebuild, repair, and finalization transactions reopen exactly at their preceding committed phases. Recovery performs one canonical mutation only from durable `PREPARED`; every state at or after `CANONICAL_APPLIED` performs zero redundant canonical writes.
+
+The strongest locality case is assertion deletion after a committed partial rebuild. Recovery remains **28 logical operations** at 100, 1,000, 10,000, and 50,000 entities, while the full-rebuild control grows from 1,387 to 699,987.
+
+The compact machine-readable evidence is `process_recovery_results.json`; `verify_process_recovery_results.py` reruns the entire matrix/locality sweep and requires exact recorded metrics plus all safety/index booleans.
+
+The surviving v0.9 prototype-level invariant is:
+
+\[
+\boxed{
+TransactionalIntent
++ AtomicCanonicalPhaseCommit
++ IndexedDependencyTraversal
++ LocalRepair
+\Rightarrow
+NoStaleRead + ExactProcessCrashRecovery
+}
+\]
 
 Run the current planner, maintenance, cascade, and recovery milestones with:
 
@@ -272,10 +317,11 @@ python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
+python verify_process_recovery_results.py
 ```
 
-## Next falsification target — v0.9 persistent WAL / real process-crash recovery
+## Next falsification target — v0.10 multiple intents / concurrent writers
 
-Move the maintenance journal and canonical/derived records into a transactional persistent store. Kill a separate process at controlled boundaries, then start a fresh process, reopen storage, drain recovery, and require exact clean-reconstruction parity without global affected-region scans.
+The next unresolved maintenance-plane question is whether overlapping independent and conflicting mutations can preserve serializable canonical truth, exact dependency invalidation, bounded read blocking, deterministic recovery ordering, and affected-region-local recovery under contention and crashes.
 
-Only after actual storage/process durability survives should the project add overlapping writers or multi-intent concurrency.
+The v0.10 experiment should begin with queued/serialized durable intents as the simplest control, then test same-key conflicts, independent subjects, evidence-update versus assertion-delete races, correction relations racing target replacement, crash recovery with multiple outstanding intents, writer lock contention, and whether read admission can safely narrow from a global maintenance block to affected subgraphs.
