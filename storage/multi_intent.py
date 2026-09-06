@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
 import uuid
@@ -83,6 +82,16 @@ class MultiIntentStore(PersistentProcessStore):
                 END;
                 """
             )
+
+    def prepare(self, *args: Any, **kwargs: Any) -> str:
+        """Reject the legacy v0.9 direct journal entry point.
+
+        Optimistic versions are complete only when every v0.10 canonical mutation
+        is admitted through intent_queue. Keeping the inherited prepare() callable
+        would silently create an unversioned active journal.
+        """
+
+        raise RuntimeError("v0.10 mutations must be admitted with enqueue_operation()")
 
     @staticmethod
     def _queue_write_key(operation: str, payload: dict[str, Any]) -> str:
@@ -260,17 +269,20 @@ class MultiIntentStore(PersistentProcessStore):
     ) -> None:
         """Apply canonical state and advance its optimistic version atomically."""
 
-        super()._apply_canonical_tx(conn, intent, trace)
         queued = conn.execute(
-            "SELECT write_key FROM intent_queue WHERE intent_id=?",
+            "SELECT write_key,status FROM intent_queue WHERE intent_id=?",
             (intent["intent_id"],),
         ).fetchone()
-        if queued is not None:
-            self._version_tx(conn, queued["write_key"])
-            conn.execute(
-                "UPDATE canonical_versions SET version=version+1 WHERE write_key=?",
-                (queued["write_key"],),
+        if queued is None or queued["status"] != ACTIVE:
+            raise RuntimeError(
+                "v0.10 canonical apply requires an ACTIVE queue-backed intent"
             )
+        super()._apply_canonical_tx(conn, intent, trace)
+        self._version_tx(conn, queued["write_key"])
+        conn.execute(
+            "UPDATE canonical_versions SET version=version+1 WHERE write_key=?",
+            (queued["write_key"],),
+        )
 
     def promote_next(self) -> dict[str, Any] | None:
         """Promote the oldest valid queued intent into v0.9's active journal."""
