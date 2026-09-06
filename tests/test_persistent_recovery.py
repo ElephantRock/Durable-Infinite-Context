@@ -15,7 +15,6 @@ class PersistentProcessRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(case.durable_phase_after_crash, "prepared")
         self.assertFalse(case.canonical_visible_after_crash)
-        # PREPARED recovery must apply the canonical mutation exactly once.
         self.assertEqual(case.recovery_trace["canonical_mutations"], 1)
         self.assertTrue(case.materialization_equal)
 
@@ -28,8 +27,6 @@ class PersistentProcessRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(case.durable_phase_after_crash, "canonical_applied")
         self.assertTrue(case.canonical_visible_after_crash)
-        # Canonical write + phase advance share one SQLite transaction, so this
-        # state is trustworthy in v0.9 and does not need v0.8's defensive redo.
         self.assertEqual(case.recovery_trace["canonical_mutations"], 0)
         self.assertTrue(case.materialization_equal)
 
@@ -42,8 +39,21 @@ class PersistentProcessRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(case.durable_phase_after_crash, "canonical_applied")
         self.assertEqual(case.invalid_nodes_after_crash, 0)
+        self.assertEqual(case.rebuilding_nodes_after_crash, 0)
         self.assertEqual(case.recovery_trace["canonical_mutations"], 0)
         self.assertTrue(case.semantic_check)
+
+    def test_sigkill_inside_partial_rebuild_rolls_back_to_invalidated(self):
+        case = run_process_crash_case(
+            16,
+            "delete_assertion",
+            "partial_rebuild_uncommitted",
+            index=8,
+        )
+        self.assertEqual(case.durable_phase_after_crash, "invalidated")
+        self.assertGreater(case.invalid_nodes_after_crash, 0)
+        self.assertEqual(case.rebuilding_nodes_after_crash, 0)
+        self.assertTrue(case.materialization_equal)
 
     def test_partial_persistent_rebuild_is_reinvalidated_and_repaired_locally(self):
         case = run_process_crash_case(
@@ -53,9 +63,48 @@ class PersistentProcessRecoveryTests(unittest.TestCase):
             index=8,
         )
         self.assertEqual(case.durable_phase_after_crash, "rebuilding")
+        self.assertEqual(case.rebuilding_nodes_after_crash, 1)
         self.assertEqual(case.recovery_trace["reinvalidated_nodes"], 4)
         self.assertTrue(case.journal_empty)
         self.assertTrue(case.all_derived_fresh)
+        self.assertTrue(case.materialization_equal)
+
+    def test_sigkill_inside_repair_rolls_back_local_repair(self):
+        case = run_process_crash_case(
+            16,
+            "delete_assertion",
+            "repair_uncommitted",
+            index=9,
+        )
+        self.assertEqual(case.durable_phase_after_crash, "rebuilding")
+        self.assertEqual(case.rebuilding_nodes_after_crash, 1)
+        self.assertEqual(case.recovery_trace["reinvalidated_nodes"], 4)
+        self.assertTrue(case.materialization_equal)
+
+    def test_sigkill_inside_finalize_preserves_repaired_intent(self):
+        case = run_process_crash_case(
+            16,
+            "replace_assertion_object",
+            "finalize_uncommitted",
+            index=10,
+        )
+        self.assertEqual(case.durable_phase_after_crash, "repaired")
+        self.assertEqual(case.journal_rows_after_crash, 1)
+        self.assertTrue(case.read_blocked_before_recovery)
+        self.assertEqual(case.recovery_trace["derived_rows_written"], 0)
+        self.assertTrue(case.materialization_equal)
+
+    def test_committed_finalize_requires_no_recovery_and_admits_reads(self):
+        case = run_process_crash_case(
+            16,
+            "replace_assertion_object",
+            "finalized_committed",
+            index=11,
+        )
+        self.assertIsNone(case.durable_phase_after_crash)
+        self.assertEqual(case.journal_rows_after_crash, 0)
+        self.assertFalse(case.read_blocked_before_recovery)
+        self.assertEqual(case.recovery_work, 0)
         self.assertTrue(case.materialization_equal)
 
 
