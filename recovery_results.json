@@ -1,0 +1,49 @@
+{
+  "experiment": "v0.8_interrupted_maintenance_crash_recovery",
+  "phase_matrix_entity_count": 100,
+  "operations": [
+    "replace_evidence_payload",
+    "replace_assertion_object",
+    "delete_assertion"
+  ],
+  "crash_phases": [
+    "prepared",
+    "canonical_applied",
+    "invalidated",
+    "rebuilding",
+    "repaired"
+  ],
+  "phase_rows": [
+    {"operation":"replace_evidence_payload","crash_phase":"prepared","affected_nodes_before_crash":0,"recovery_work":67,"canonical_mutations_during_recovery":1,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":49,"full_rebuild_work":10076},
+    {"operation":"replace_evidence_payload","crash_phase":"canonical_applied","affected_nodes_before_crash":0,"recovery_work":65,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":49,"full_rebuild_work":10076},
+    {"operation":"replace_evidence_payload","crash_phase":"invalidated","affected_nodes_before_crash":3,"recovery_work":53,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":49,"full_rebuild_work":10076},
+    {"operation":"replace_evidence_payload","crash_phase":"rebuilding","affected_nodes_before_crash":3,"recovery_work":36,"canonical_mutations_during_recovery":0,"reinvalidation_work":8,"rebuilt_nodes":3,"rebuild_work":23,"full_rebuild_work":10076},
+    {"operation":"replace_evidence_payload","crash_phase":"repaired","affected_nodes_before_crash":3,"recovery_work":3,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":0,"rebuild_work":0,"full_rebuild_work":10076},
+
+    {"operation":"replace_assertion_object","crash_phase":"prepared","affected_nodes_before_crash":0,"recovery_work":28,"canonical_mutations_during_recovery":1,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":12,"full_rebuild_work":10078},
+    {"operation":"replace_assertion_object","crash_phase":"canonical_applied","affected_nodes_before_crash":0,"recovery_work":26,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":12,"full_rebuild_work":10078},
+    {"operation":"replace_assertion_object","crash_phase":"invalidated","affected_nodes_before_crash":3,"recovery_work":16,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":3,"rebuild_work":12,"full_rebuild_work":10078},
+    {"operation":"replace_assertion_object","crash_phase":"rebuilding","affected_nodes_before_crash":3,"recovery_work":26,"canonical_mutations_during_recovery":0,"reinvalidation_work":9,"rebuilt_nodes":3,"rebuild_work":12,"full_rebuild_work":10078},
+    {"operation":"replace_assertion_object","crash_phase":"repaired","affected_nodes_before_crash":3,"recovery_work":3,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":0,"rebuild_work":0,"full_rebuild_work":10078},
+
+    {"operation":"delete_assertion","crash_phase":"prepared","affected_nodes_before_crash":0,"recovery_work":116,"canonical_mutations_during_recovery":1,"reinvalidation_work":0,"rebuilt_nodes":4,"rebuild_work":97,"full_rebuild_work":9977},
+    {"operation":"delete_assertion","crash_phase":"canonical_applied","affected_nodes_before_crash":0,"recovery_work":114,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":4,"rebuild_work":97,"full_rebuild_work":9977},
+    {"operation":"delete_assertion","crash_phase":"invalidated","affected_nodes_before_crash":4,"recovery_work":101,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":4,"rebuild_work":97,"full_rebuild_work":9977},
+    {"operation":"delete_assertion","crash_phase":"rebuilding","affected_nodes_before_crash":4,"recovery_work":35,"canonical_mutations_during_recovery":0,"reinvalidation_work":11,"rebuilt_nodes":4,"rebuild_work":19,"full_rebuild_work":9977},
+    {"operation":"delete_assertion","crash_phase":"repaired","affected_nodes_before_crash":4,"recovery_work":3,"canonical_mutations_during_recovery":0,"reinvalidation_work":0,"rebuilt_nodes":0,"rebuild_work":0,"full_rebuild_work":9977}
+  ],
+  "locality_rows": [
+    {"entity_count":100,"operation":"delete_assertion","crash_phase":"rebuilding","affected_nodes_before_crash":4,"recovery_work":35,"reinvalidation_work":11,"rebuilt_nodes":4,"rebuild_work":19,"full_rebuild_work":9977},
+    {"entity_count":1000,"operation":"delete_assertion","crash_phase":"rebuilding","affected_nodes_before_crash":4,"recovery_work":35,"reinvalidation_work":11,"rebuilt_nodes":4,"rebuild_work":19,"full_rebuild_work":102675},
+    {"entity_count":10000,"operation":"delete_assertion","crash_phase":"rebuilding","affected_nodes_before_crash":4,"recovery_work":35,"reinvalidation_work":11,"rebuilt_nodes":4,"rebuild_work":19,"full_rebuild_work":1029675},
+    {"entity_count":50000,"operation":"delete_assertion","crash_phase":"rebuilding","affected_nodes_before_crash":4,"recovery_work":35,"reinvalidation_work":11,"rebuilt_nodes":4,"rebuild_work":19,"full_rebuild_work":5149651}
+  ],
+  "required_booleans": {
+    "read_blocked_before_recovery": true,
+    "materialization_equal": true,
+    "semantic_check": true,
+    "all_derived_fresh": true,
+    "journal_empty": true
+  },
+  "scope": "deep-copied durable-image simulation; single in-flight mutation; no filesystem/database atomicity, concurrent-writer, distributed, or cold/archive recovery claim"
+}
