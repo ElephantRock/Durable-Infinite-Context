@@ -7,7 +7,6 @@ from typing import Any, Type
 from simulator.cascade import evidence_id, subject_id
 from simulator.subject_fanout import _seed_subject_fanout, fanout_predicate
 from storage.compositional_profile import CompositionalProfileStore
-from storage.predicate_schema import PredicateMutationControlStore
 from storage.sqlite_recovery import (
     DELETE_ASSERTION,
     UPSERT_EVIDENCE,
@@ -176,6 +175,7 @@ def _run_case(
             "history_depth": history_depth,
             "changed_count": changed_count,
             "changed_predicates": changed,
+            "persisted_profile": profile,
             "manifest_predicates": list(profile.get("predicates", [])),
             "profile_has_embedded_evidence": bool(profile.get("evidence_payloads", [])),
             "profile_storage_bytes": _profile_storage_bytes(store, subject),
