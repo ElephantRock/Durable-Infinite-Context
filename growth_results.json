@@ -42,7 +42,7 @@
     },
     "semantic_check": true,
     "materialization_equal": true,
-    "recovery_work": 72,
+    "recovery_work": 76,
     "full_rebuild_work": 896,
     "all_derived_fresh": true
   },
@@ -72,7 +72,7 @@
       },
       "semantic_check": true,
       "materialization_equal": true,
-      "recovery_work": 72,
+      "recovery_work": 76,
       "full_rebuild_work": 1400,
       "all_derived_fresh": true
     },
@@ -95,7 +95,7 @@
       },
       "semantic_check": true,
       "materialization_equal": true,
-      "recovery_work": 72,
+      "recovery_work": 76,
       "full_rebuild_work": 14000,
       "all_derived_fresh": true
     },
@@ -118,7 +118,7 @@
       },
       "semantic_check": true,
       "materialization_equal": true,
-      "recovery_work": 72,
+      "recovery_work": 76,
       "full_rebuild_work": 140000,
       "all_derived_fresh": true
     },
@@ -141,7 +141,7 @@
       },
       "semantic_check": true,
       "materialization_equal": true,
-      "recovery_work": 72,
+      "recovery_work": 76,
       "full_rebuild_work": 700000,
       "all_derived_fresh": true
     }
