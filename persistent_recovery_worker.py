@@ -14,8 +14,12 @@ FAILPOINTS = {
     "canonical_committed",
     "invalidation_uncommitted",
     "invalidated_committed",
+    "partial_rebuild_uncommitted",
     "partial_rebuild_committed",
+    "repair_uncommitted",
     "repaired_committed",
+    "finalize_uncommitted",
+    "finalized_committed",
 }
 
 
@@ -57,12 +61,34 @@ def crash(store: PersistentProcessStore, operation: str, index: int, failpoint: 
     if failpoint == "invalidated_committed":
         abrupt_kill()
 
+    if failpoint == "partial_rebuild_uncommitted":
+        open_transaction = store.begin_partial_rebuild_without_commit()
+        if not open_transaction.in_transaction:
+            raise AssertionError("partial rebuild failpoint does not hold a live transaction")
+        abrupt_kill()
+
     store.partial_rebuild_transaction()
     if failpoint == "partial_rebuild_committed":
         abrupt_kill()
 
+    if failpoint == "repair_uncommitted":
+        open_transaction = store.begin_repair_without_commit()
+        if not open_transaction.in_transaction:
+            raise AssertionError("repair failpoint does not hold a live transaction")
+        abrupt_kill()
+
     store.repair_transaction()
     if failpoint == "repaired_committed":
+        abrupt_kill()
+
+    if failpoint == "finalize_uncommitted":
+        open_transaction = store.begin_finalize_without_commit()
+        if not open_transaction.in_transaction:
+            raise AssertionError("finalize failpoint does not hold a live transaction")
+        abrupt_kill()
+
+    store.finalize_transaction()
+    if failpoint == "finalized_committed":
         abrupt_kill()
 
     raise AssertionError("crash command reached end without failpoint termination")
