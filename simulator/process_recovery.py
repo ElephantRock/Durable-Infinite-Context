@@ -72,6 +72,7 @@ class ProcessRecoveryCase:
     journal_mode: str
     synchronous: int
     dependency_lookup_uses_index: bool
+    affected_traversal_uses_index: bool
     full_rebuild_work: int
 
     @property
@@ -134,6 +135,7 @@ class ProcessRecoveryCase:
             "journal_mode": self.journal_mode,
             "synchronous": self.synchronous,
             "dependency_lookup_uses_index": self.dependency_lookup_uses_index,
+            "affected_traversal_uses_index": self.affected_traversal_uses_index,
             "transaction_boundary_correct": self.transaction_boundary_correct,
             "full_rebuild_work": self.full_rebuild_work,
             "work_fraction_vs_full_rebuild": self.work_fraction_vs_full_rebuild,
@@ -206,6 +208,8 @@ def run_process_crash_case(
             raise AssertionError("v0.9 requires SQLite WAL mode")
         if not bootstrap["dependency_lookup_uses_index"]:
             raise AssertionError("dependency source lookup is not indexed")
+        if not bootstrap["affected_traversal_uses_index"]:
+            raise AssertionError("recursive affected-region traversal is not index-backed")
 
         crashed = _worker(
             db,
@@ -250,7 +254,7 @@ def run_process_crash_case(
             rebuilding_nodes_after_crash=int(phase["rebuilding_nodes"]),
             read_blocked_before_recovery=read_blocked,
             expected_read_blocked_before_recovery=expected_read_blocked,
-            recovery_trace={k: int(v) for k, v in recovery.items()},
+            recovery_trace={key: int(value) for key, value in recovery.items()},
             materialization_equal=bool(inspection["materialization_equal"]),
             semantic_check=semantic,
             all_derived_fresh=bool(inspection["all_derived_fresh"]),
@@ -258,6 +262,7 @@ def run_process_crash_case(
             journal_mode=str(inspection["settings"]["journal_mode"]),
             synchronous=int(inspection["settings"]["synchronous"]),
             dependency_lookup_uses_index=bool(bootstrap["dependency_lookup_uses_index"]),
+            affected_traversal_uses_index=bool(bootstrap["affected_traversal_uses_index"]),
             full_rebuild_work=int(inspection["full_rebuild_work"]),
         )
 
