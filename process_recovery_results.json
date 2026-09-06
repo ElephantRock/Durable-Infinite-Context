@@ -80,6 +80,12 @@
     "retired_nodes",
     "full_rebuild_work"
   ],
+  "locality_cardinalities": [
+    100,
+    1000,
+    10000,
+    50000
+  ],
   "locality_rows": [
     [100,28,4,4,1387],
     [1000,28,4,4,13987],
