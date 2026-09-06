@@ -21,11 +21,17 @@ def row_key(row: dict, *, locality: bool = False):
 
 
 def compare_rows(recorded_rows: list[dict], observed_rows: list[dict], *, locality: bool = False) -> None:
+    require_equal("recovery row count", len(recorded_rows), len(observed_rows))
+
+    recorded_keys = [row_key(row, locality=locality) for row in recorded_rows]
+    observed_keys = [row_key(row, locality=locality) for row in observed_rows]
+    require_equal("unique recorded recovery keys", len(recorded_keys), len(set(recorded_keys)))
+    require_equal("unique observed recovery keys", len(observed_keys), len(set(observed_keys)))
+    require_equal("recovery key set", set(recorded_keys), set(observed_keys))
+
     observed_by_key = {row_key(row, locality=locality): row for row in observed_rows}
     for expected in recorded_rows:
         key = row_key(expected, locality=locality)
-        if key not in observed_by_key:
-            raise AssertionError(f"missing observed recovery row: {key}")
         observed = observed_by_key[key]
         for field, expected_value in expected.items():
             require_equal(f"{key}.{field}", expected_value, observed[field])
