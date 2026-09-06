@@ -1,0 +1,152 @@
+{
+  "experiment": "v0.12_local_topology_growth_materialization",
+  "control": {
+    "store": "PromotionRevalidatedTopologyStore",
+    "entity_count": 64,
+    "moved_index": 40,
+    "target_index": 81,
+    "moved_subject": "cascade-subject-0000040",
+    "target_subject": "cascade-subject-0000081",
+    "canonical_moved": true,
+    "target_context_present": false,
+    "target_derived_count": 0,
+    "old_subject_retired": true,
+    "queue_final": {
+      "queued": 0,
+      "active": 0,
+      "done": 1,
+      "conflict": 0
+    },
+    "semantic_check": true,
+    "materialization_equal": false,
+    "recovery_work": 35,
+    "full_rebuild_work": 885,
+    "all_derived_fresh": true
+  },
+  "created": {
+    "store": "GrowthAwareTopologyStore",
+    "entity_count": 64,
+    "moved_index": 40,
+    "target_index": 81,
+    "moved_subject": "cascade-subject-0000040",
+    "target_subject": "cascade-subject-0000081",
+    "canonical_moved": true,
+    "target_context_present": true,
+    "target_derived_count": 4,
+    "old_subject_retired": true,
+    "queue_final": {
+      "queued": 0,
+      "active": 0,
+      "done": 1,
+      "conflict": 0
+    },
+    "semantic_check": true,
+    "materialization_equal": true,
+    "recovery_work": 76,
+    "full_rebuild_work": 896,
+    "all_derived_fresh": true
+  },
+  "locality_cardinalities": [
+    100,
+    1000,
+    10000,
+    50000
+  ],
+  "locality_rows": [
+    {
+      "store": "GrowthAwareTopologyStore",
+      "entity_count": 100,
+      "moved_index": 50,
+      "target_index": 117,
+      "moved_subject": "cascade-subject-0000050",
+      "target_subject": "cascade-subject-0000117",
+      "canonical_moved": true,
+      "target_context_present": true,
+      "target_derived_count": 4,
+      "old_subject_retired": true,
+      "queue_final": {
+        "queued": 0,
+        "active": 0,
+        "done": 1,
+        "conflict": 0
+      },
+      "semantic_check": true,
+      "materialization_equal": true,
+      "recovery_work": 76,
+      "full_rebuild_work": 1400,
+      "all_derived_fresh": true
+    },
+    {
+      "store": "GrowthAwareTopologyStore",
+      "entity_count": 1000,
+      "moved_index": 500,
+      "target_index": 1017,
+      "moved_subject": "cascade-subject-0000500",
+      "target_subject": "cascade-subject-0001017",
+      "canonical_moved": true,
+      "target_context_present": true,
+      "target_derived_count": 4,
+      "old_subject_retired": true,
+      "queue_final": {
+        "queued": 0,
+        "active": 0,
+        "done": 1,
+        "conflict": 0
+      },
+      "semantic_check": true,
+      "materialization_equal": true,
+      "recovery_work": 76,
+      "full_rebuild_work": 14000,
+      "all_derived_fresh": true
+    },
+    {
+      "store": "GrowthAwareTopologyStore",
+      "entity_count": 10000,
+      "moved_index": 5000,
+      "target_index": 10017,
+      "moved_subject": "cascade-subject-0005000",
+      "target_subject": "cascade-subject-0010017",
+      "canonical_moved": true,
+      "target_context_present": true,
+      "target_derived_count": 4,
+      "old_subject_retired": true,
+      "queue_final": {
+        "queued": 0,
+        "active": 0,
+        "done": 1,
+        "conflict": 0
+      },
+      "semantic_check": true,
+      "materialization_equal": true,
+      "recovery_work": 76,
+      "full_rebuild_work": 140000,
+      "all_derived_fresh": true
+    },
+    {
+      "store": "GrowthAwareTopologyStore",
+      "entity_count": 50000,
+      "moved_index": 25000,
+      "target_index": 50017,
+      "moved_subject": "cascade-subject-0025000",
+      "target_subject": "cascade-subject-0050017",
+      "canonical_moved": true,
+      "target_context_present": true,
+      "target_derived_count": 4,
+      "old_subject_retired": true,
+      "queue_final": {
+        "queued": 0,
+        "active": 0,
+        "done": 1,
+        "conflict": 0
+      },
+      "semantic_check": true,
+      "materialization_equal": true,
+      "recovery_work": 76,
+      "full_rebuild_work": 700000,
+      "all_derived_fresh": true
+    }
+  ],
+  "invariant": "canonical topology growth must create the missing derived outputs required by the new canonical key rather than restricting repair to already-materialized nodes",
+  "mechanism": "changed-key assertion upserts derive a bounded set of missing profile/state/support/context obligations, persist them as invalid placeholders inside local invalidation, then reuse the existing topological repair path",
+  "scope": "single SQLite database; one assertion move to a brand-new subject; deadline predicate; synthetic oracle assertions; no arbitrary new-predicate or distributed claim"
+}
