@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.11
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.12
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit in the model context window.
 
@@ -41,6 +41,7 @@ The current prototype contains:
 - durable ordered multi-intent admission with optimistic canonical versions;
 - snapshot-consistent derived reads;
 - promotion-time revalidation of topology-dependent intent impact metadata;
+- local creation of missing required derived outputs when canonical topology grows;
 - machine-readable result ledgers with executable replay verifiers for the hardened maintenance/recovery milestones;
 - a pluggable `AgenticRAGAdapter` seam for the still-required strong baseline comparison.
 
@@ -58,6 +59,7 @@ Evidence
 + DurableRecovery
 + OrderedIntentAdmission
 + TopologyRevalidation
++ MaterializationCompleteness
 }
 \]
 
@@ -77,7 +79,7 @@ The current evidence also does **not** establish:
 - arbitrary multi-writer database execution (SQLite remains the physical single writer);
 - production latency/cost performance;
 - cold/archive recovery;
-- arbitrary topology growth into previously nonexistent derived materializations;
+- arbitrary new-predicate/schema materialization;
 - a strong agentic-RAG superiority result.
 
 A genuine strong agentic retrieval baseline and real extraction remain mandatory before accepting the architecture as broadly superior.
@@ -97,6 +99,7 @@ A genuine strong agentic retrieval baseline and real extraction remain mandatory
 | v0.9 | Do the crash invariants survive real persistence/process death? | SQLite WAL + `synchronous=FULL` passed 33 real-`SIGKILL` cases; fixed-region recovery stayed local through 50k entities. |
 | v0.10 | Do multiple durable logical intents preserve conflict/recovery semantics? | Concurrent admission, explicit same-key conflict, local read protection, and fixed three-intent recovery passed; a snapshot race was found and fixed before merge. |
 | v0.11 | Can admission-time impact metadata become stale after earlier topology changes? | Yes—the v0.10 control leaked a stale read. Promotion-time topology revalidation closes that leak while preserving local work in the controlled sweep. |
+| v0.12 | Can canonical growth create outputs that do not yet exist? | Yes—the v0.11 control ended with canonical truth and all existing nodes fresh but no target materialization. Explicit local missing-output obligations restore exact completeness with fixed work through 50k entities. |
 
 Detailed narratives and machine-readable results live in the versioned `RESULTS_V0.*.md` and `*_results.json` files.
 
@@ -180,7 +183,24 @@ PromotionRevalidated(x) \Leftarrow DependsOnMutableCrossRecordTopology(x)
 
 Accordingly, same-write-key `previous_json` snapshots are protected by optimistic version conflict, while topology-derived `read_keys` are recomputed at promotion.
 
-See `RESULTS_V0.11.md`, `topology_results.json`, and `verify_topology_results.py`.
+### v0.12 local topology-growth materialization
+
+The v0.11 control exposes a completeness failure rather than a stale-lifecycle failure: canonical truth moves to a brand-new subject, the old subject retires, every remaining derived node is fresh, but the target has zero derived nodes and clean-rebuild parity is false.
+
+v0.12 derives the bounded missing output obligation set for the new canonical key and creates only absent outputs before reusing the existing topological repair path.
+
+The corrected fixed one-move workload produced:
+
+| Entities | Recovery work | Full rebuild |
+|---:|---:|---:|
+| 100 | **72** | 1,400 |
+| 1,000 | **72** | 14,000 |
+| 10,000 | **72** | 140,000 |
+| 50,000 | **72** | 700,000 |
+
+At N=64 the corrected target has exactly four materializations—profile, state, support, and context—and exact clean-rebuild parity is restored.
+
+See `RESULTS_V0.12.md`, `growth_results.json`, and `verify_growth_results.py`.
 
 ## Reproducing the hardened path
 
@@ -194,9 +214,10 @@ python verify_recovery_results.py
 python verify_process_recovery_results.py
 python verify_multi_intent_results.py
 python verify_topology_results.py
+python verify_growth_results.py
 ```
 
-CI runs this chain on pull requests and uploads the v0.9, v0.10, and v0.11 evidence ledgers as artifacts.
+CI runs this chain on pull requests and uploads the v0.9, v0.10, v0.11, and v0.12 evidence ledgers as artifacts.
 
 ## Current architectural hypothesis
 
@@ -219,6 +240,8 @@ Canonical mutation
   -> write-key conflict validation
   -> promotion-time topology-impact revalidation
   -> local dependency invalidation
+  -> derive missing output obligations
+  -> locally create required absent materializations
   -> selective reconstruction / retirement
   -> crash-safe completion
 ```
@@ -227,16 +250,20 @@ The important distinction remains:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
-## Next falsification target — topology growth / missing derived-node creation
+A second distinction is now explicit:
 
-v0.11 repairs stale impact metadata when existing topology changes. It does not yet establish that canonical topology can grow into regions for which no derived materialization exists.
+> Derived correctness requires both freshness of existing outputs and completeness of required outputs.
+
+## Next falsification target — predicate-schema growth
+
+v0.12 establishes local creation for the controlled `deadline` materialization schema. It does not establish that the same machinery is correct when canonical truth introduces a genuinely new predicate whose output semantics may differ from the existing profile/state/support/context assumptions.
 
 The next high-value counterexample is therefore:
 
 \[
 \boxed{
-CanonicalTopologyGrowth \Rightarrow DerivedNodeCreation\ ?
+NewPredicate \Rightarrow SchemaCorrectLocalMaterialization\ ?
 }
 \]
 
-A move or insertion into a genuinely new subject/predicate may produce seed node IDs that do not yet exist in `derived_nodes`. The next experiment should determine whether the current recovery path silently leaves canonical truth without a corresponding state/profile/support/context materialization, and if so whether missing nodes can be synthesized locally without a full reconstruction.
+The current persistent profile path was built around the `deadline` workload while state/support/context node IDs encode a predicate. v0.13 should introduce predicate changes and coexistence cases, then test whether output identity, dependencies, profile semantics, retirement, clean-rebuild parity, read protection, and local recovery remain correct without hard-coded predicate assumptions.
