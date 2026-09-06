@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
+from state.cascade import evidence_node, profile_node, state_node
 from storage.sqlite_recovery import (
+    DELETE_ASSERTION,
     INVALIDATED,
     REBUILDING,
     REPAIRED,
+    UPSERT_ASSERTION,
+    UPSERT_EVIDENCE,
     PersistentRecoveryTrace,
     SQLiteRecoveryStore,
     _json,
     _loads,
+    assertion_from_dict,
 )
 
 
@@ -47,6 +53,94 @@ class PersistentProcessStore(SQLiteRecoveryStore):
                 int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
                 for table in tables
             )
+
+    def _affected_nodes(
+        self,
+        conn: sqlite3.Connection,
+        intent: sqlite3.Row,
+    ) -> list[str]:
+        """Discover the affected region with an explicitly indexed recursive walk."""
+
+        operation = intent["operation"]
+        payload = _loads(intent["payload_json"], {})
+        previous = _loads(intent["previous_json"], {}) if intent["previous_json"] else {}
+        seeds: list[str] = []
+        canonical_seeds: list[str] = []
+
+        if operation == UPSERT_EVIDENCE:
+            canonical_seeds.append(evidence_node(payload["evidence"]["id"]))
+        elif operation == UPSERT_ASSERTION:
+            item = assertion_from_dict(payload["assertion"])
+            old_data = previous.get("assertion")
+            old = assertion_from_dict(old_data) if old_data else None
+            keys = {item.key}
+            if old is not None:
+                keys.add(old.key)
+            seeds.extend(state_node(key) for key in sorted(keys))
+            profile_changed = (
+                old is None
+                or old.subject_id != item.subject_id
+                or old.predicate != item.predicate
+                or old.evidence_ids != item.evidence_ids
+            )
+            if profile_changed:
+                subjects = {item.subject_id}
+                if old is not None:
+                    subjects.add(old.subject_id)
+                seeds.extend(profile_node(subject_id) for subject_id in sorted(subjects))
+        elif operation == DELETE_ASSERTION:
+            old = assertion_from_dict(previous["assertion"])
+            seeds.extend([state_node(old.key), profile_node(old.subject_id)])
+        else:
+            raise ValueError(operation)
+
+        all_seeds = tuple(dict.fromkeys([*seeds, *canonical_seeds]))
+        if not all_seeds:
+            return []
+        placeholders = ",".join("?" for _ in all_seeds)
+        derived_placeholders = ",".join("?" for _ in seeds) if seeds else "NULL"
+        sql = f"""
+            WITH RECURSIVE affected(node_id) AS (
+                SELECT node_id FROM derived_nodes
+                WHERE node_id IN ({derived_placeholders})
+                UNION
+                SELECT derived_node
+                FROM dependency_edges INDEXED BY idx_dependency_source
+                WHERE source_node IN ({placeholders})
+                UNION
+                SELECT e.derived_node
+                FROM dependency_edges AS e INDEXED BY idx_dependency_source
+                JOIN affected AS a ON e.source_node=a.node_id
+            )
+            SELECT DISTINCT node_id FROM affected ORDER BY node_id
+        """
+        params = [*seeds, *all_seeds] if seeds else [*all_seeds]
+        return [row["node_id"] for row in conn.execute(sql, params)]
+
+    def affected_traversal_uses_index(self) -> bool:
+        """Verify the actual recursive affected-region plan uses the source index."""
+
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                EXPLAIN QUERY PLAN
+                WITH RECURSIVE affected(node_id) AS (
+                    SELECT node_id FROM derived_nodes WHERE node_id IN (?)
+                    UNION
+                    SELECT derived_node
+                    FROM dependency_edges INDEXED BY idx_dependency_source
+                    WHERE source_node IN (?,?)
+                    UNION
+                    SELECT e.derived_node
+                    FROM dependency_edges AS e INDEXED BY idx_dependency_source
+                    JOIN affected AS a ON e.source_node=a.node_id
+                )
+                SELECT DISTINCT node_id FROM affected ORDER BY node_id
+                """,
+                ("state:probe:deadline:default", "canonical:probe", "state:probe:deadline:default"),
+            ).fetchall()
+            detail = " ".join(str(row["detail"]) for row in rows).lower()
+            return detail.count("idx_dependency_source") >= 2
 
     def begin_partial_rebuild_without_commit(self):
         """Leave the partial-derived-write transaction open for SIGKILL testing."""
