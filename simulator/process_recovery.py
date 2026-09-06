@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 import sys
 import tempfile
@@ -206,6 +207,8 @@ def run_process_crash_case(
             raise AssertionError("bootstrap materialization does not match clean rebuild")
         if bootstrap["settings"]["journal_mode"] != "wal":
             raise AssertionError("v0.9 requires SQLite WAL mode")
+        if int(bootstrap["settings"]["synchronous"]) != 2:
+            raise AssertionError("v0.9 requires SQLite synchronous=FULL")
         if not bootstrap["dependency_lookup_uses_index"]:
             raise AssertionError("dependency source lookup is not indexed")
         if not bootstrap["affected_traversal_uses_index"]:
@@ -222,8 +225,11 @@ def run_process_crash_case(
             failpoint,
             check=False,
         )
-        if crashed.returncode == 0:
-            raise AssertionError(f"crash worker exited cleanly at failpoint {failpoint}")
+        if crashed.returncode != -signal.SIGKILL:
+            raise AssertionError(
+                f"failpoint {failpoint} did not terminate by SIGKILL: "
+                f"returncode={crashed.returncode}, stderr={crashed.stderr!r}"
+            )
 
         store = PersistentProcessStore(db)
         phase = store.phase_snapshot()
