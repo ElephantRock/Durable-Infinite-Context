@@ -27,18 +27,26 @@ FAILPOINTS = (
     "canonical_committed",
     "invalidation_uncommitted",
     "invalidated_committed",
+    "partial_rebuild_uncommitted",
     "partial_rebuild_committed",
+    "repair_uncommitted",
     "repaired_committed",
+    "finalize_uncommitted",
+    "finalized_committed",
 )
 
-EXPECTED_DURABLE_PHASE = {
+EXPECTED_DURABLE_PHASE: dict[str, str | None] = {
     "prepared_committed": "prepared",
     "canonical_uncommitted": "prepared",
     "canonical_committed": "canonical_applied",
     "invalidation_uncommitted": "canonical_applied",
     "invalidated_committed": "invalidated",
+    "partial_rebuild_uncommitted": "invalidated",
     "partial_rebuild_committed": "rebuilding",
+    "repair_uncommitted": "rebuilding",
     "repaired_committed": "repaired",
+    "finalize_uncommitted": "repaired",
+    "finalized_committed": None,
 }
 
 
@@ -48,11 +56,14 @@ class ProcessRecoveryCase:
     operation: str
     failpoint: str
     durable_phase_after_crash: str | None
-    expected_durable_phase: str
+    expected_durable_phase: str | None
     canonical_visible_after_crash: bool
     expected_canonical_visible: bool
+    journal_rows_after_crash: int
     invalid_nodes_after_crash: int
+    rebuilding_nodes_after_crash: int
     read_blocked_before_recovery: bool
+    expected_read_blocked_before_recovery: bool
     recovery_trace: dict[str, int]
     materialization_equal: bool
     semantic_check: bool
@@ -65,14 +76,30 @@ class ProcessRecoveryCase:
 
     @property
     def transaction_boundary_correct(self) -> bool:
-        return (
-            self.durable_phase_after_crash == self.expected_durable_phase
-            and self.canonical_visible_after_crash == self.expected_canonical_visible
-            and (
-                self.failpoint != "invalidation_uncommitted"
-                or self.invalid_nodes_after_crash == 0
-            )
-        )
+        if self.durable_phase_after_crash != self.expected_durable_phase:
+            return False
+        if self.canonical_visible_after_crash != self.expected_canonical_visible:
+            return False
+        if self.read_blocked_before_recovery != self.expected_read_blocked_before_recovery:
+            return False
+        if self.failpoint in {"prepared_committed", "canonical_uncommitted", "canonical_committed", "invalidation_uncommitted"}:
+            if self.invalid_nodes_after_crash != 0 or self.rebuilding_nodes_after_crash != 0:
+                return False
+        if self.failpoint in {"invalidated_committed", "partial_rebuild_uncommitted"}:
+            if self.invalid_nodes_after_crash <= 0 or self.rebuilding_nodes_after_crash != 0:
+                return False
+        if self.failpoint in {"partial_rebuild_committed", "repair_uncommitted"}:
+            if self.invalid_nodes_after_crash <= 0 or self.rebuilding_nodes_after_crash != 1:
+                return False
+        if self.failpoint in {"repaired_committed", "finalize_uncommitted", "finalized_committed"}:
+            if self.invalid_nodes_after_crash != 0 or self.rebuilding_nodes_after_crash != 0:
+                return False
+        if self.failpoint == "finalized_committed":
+            if self.journal_rows_after_crash != 0:
+                return False
+        elif self.journal_rows_after_crash != 1:
+            return False
+        return True
 
     @property
     def recovery_work(self) -> int:
@@ -93,8 +120,11 @@ class ProcessRecoveryCase:
             "expected_durable_phase": self.expected_durable_phase,
             "canonical_visible_after_crash": self.canonical_visible_after_crash,
             "expected_canonical_visible": self.expected_canonical_visible,
+            "journal_rows_after_crash": self.journal_rows_after_crash,
             "invalid_nodes_after_crash": self.invalid_nodes_after_crash,
+            "rebuilding_nodes_after_crash": self.rebuilding_nodes_after_crash,
             "read_blocked_before_recovery": self.read_blocked_before_recovery,
+            "expected_read_blocked_before_recovery": self.expected_read_blocked_before_recovery,
             "recovery_trace": self.recovery_trace,
             "recovery_work": self.recovery_work,
             "materialization_equal": self.materialization_equal,
@@ -195,6 +225,7 @@ def run_process_crash_case(
         phase = store.phase_snapshot()
         canonical_visible = _canonical_visible(store, operation, target)
         expected_visible = failpoint not in {"prepared_committed", "canonical_uncommitted"}
+        expected_read_blocked = failpoint != "finalized_committed"
 
         read_blocked = False
         try:
@@ -214,8 +245,11 @@ def run_process_crash_case(
             expected_durable_phase=EXPECTED_DURABLE_PHASE[failpoint],
             canonical_visible_after_crash=canonical_visible,
             expected_canonical_visible=expected_visible,
+            journal_rows_after_crash=int(phase["journal_rows"]),
             invalid_nodes_after_crash=int(phase["invalid_nodes"]),
+            rebuilding_nodes_after_crash=int(phase["rebuilding_nodes"]),
             read_blocked_before_recovery=read_blocked,
+            expected_read_blocked_before_recovery=expected_read_blocked,
             recovery_trace={k: int(v) for k, v in recovery.items()},
             materialization_equal=bool(inspection["materialization_equal"]),
             semantic_check=semantic,
@@ -229,8 +263,6 @@ def run_process_crash_case(
 
         if not case.transaction_boundary_correct:
             raise AssertionError(f"transaction boundary mismatch: {case.to_dict()}")
-        if not case.read_blocked_before_recovery:
-            raise AssertionError("pending durable maintenance did not block derived read")
         if not case.materialization_equal:
             raise AssertionError("persistent recovery drifted from clean reconstruction")
         if not case.semantic_check:
