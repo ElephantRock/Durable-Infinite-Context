@@ -158,7 +158,7 @@ expected 65, observed 66
 
 The observed run simultaneously showed exact parity and the updated redo-safe values for all three `canonical_applied` rows. Those observed measurements are now recorded in `recovery_results.json`.
 
-The final verifier is additionally hardened to require:
+The final verifier additionally requires:
 
 - exact phase/locality row counts;
 - unique row keys;
