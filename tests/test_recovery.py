@@ -43,6 +43,83 @@ class RecoveryTests(unittest.TestCase):
         self.assertIn("Nova", restarted.read_context(key) or "")
         self.assertNotIn(intent_id, restarted.journal)
 
+    def test_torn_prepared_marker_replays_already_durable_assertion_upsert(self):
+        """Canonical write durable, PREPARED phase marker still durable: replay is safe."""
+
+        coordinator = self._coordinator()
+        i = 8
+        old = coordinator.store.assertions[assertion_id(i)]
+        replacement = Assertion(
+            old.id,
+            old.subject_id,
+            old.predicate,
+            76,
+            old.recorded_seq,
+            valid_from=old.valid_from,
+            valid_to=old.valid_to,
+            evidence_ids=old.evidence_ids,
+        )
+        intent_id = coordinator.prepare_upsert_assertion(replacement)
+
+        # Simulate canonical persistence succeeding while the phase advancement is lost.
+        coordinator.store.add_assertion(replacement)
+        self.assertEqual(coordinator.journal[intent_id].phase, MaintenancePhase.PREPARED)
+
+        restarted = coordinator.durable_image()
+        trace = restarted.recover_all()
+        self.assertEqual(trace.canonical_mutations, 1)
+        self._assert_recovered(restarted)
+        self.assertEqual(restarted.store.state[old.key].operative_values, [76])
+
+    def test_torn_prepared_marker_replays_already_durable_delete(self):
+        """Deletion must also be redo-safe when phase advancement is lost."""
+
+        coordinator = self._coordinator()
+        i = 9
+        old = coordinator.store.assertions[assertion_id(i)]
+        intent_id = coordinator.prepare_delete_assertion(old.id)
+
+        coordinator.store.remove_assertion(old.id)
+        self.assertEqual(coordinator.journal[intent_id].phase, MaintenancePhase.PREPARED)
+        self.assertNotIn(old.id, coordinator.store.assertions)
+
+        restarted = coordinator.durable_image()
+        trace = restarted.recover_all()
+        self.assertEqual(trace.canonical_mutations, 1)
+        self._assert_recovered(restarted)
+        self.assertNotIn(old.key, restarted.store.state)
+        self.assertNotIn(old.subject_id, restarted.materialization.index.profiles)
+
+    def test_torn_canonical_applied_marker_replays_missing_canonical_write(self):
+        """Phase marker durable, canonical write lost: recovery must redo canonical mutation."""
+
+        coordinator = self._coordinator()
+        i = 10
+        old = coordinator.store.assertions[assertion_id(i)]
+        replacement = Assertion(
+            old.id,
+            old.subject_id,
+            old.predicate,
+            79,
+            old.recorded_seq,
+            valid_from=old.valid_from,
+            valid_to=old.valid_to,
+            evidence_ids=old.evidence_ids,
+        )
+        intent_id = coordinator.prepare_upsert_assertion(replacement)
+
+        # Simulate the opposite torn boundary: the phase marker persisted but the
+        # canonical write did not. A redo-style recovery protocol must repair this.
+        coordinator.journal[intent_id].phase = MaintenancePhase.CANONICAL_APPLIED
+        self.assertEqual(coordinator.store.assertions[old.id].object_value, old.object_value)
+
+        restarted = coordinator.durable_image()
+        trace = restarted.recover_all()
+        self.assertEqual(trace.canonical_mutations, 1)
+        self._assert_recovered(restarted)
+        self.assertEqual(restarted.store.assertions[old.id].object_value, 79)
+        self.assertEqual(restarted.store.state[old.key].operative_values, [79])
+
     def test_crash_after_canonical_write_cannot_serve_stale_context(self):
         coordinator = self._coordinator()
         i = 11
