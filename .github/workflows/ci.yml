@@ -23,7 +23,7 @@ jobs:
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
-      - run: python run_multi_intent_experiment.py
+      - run: python verify_multi_intent_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
