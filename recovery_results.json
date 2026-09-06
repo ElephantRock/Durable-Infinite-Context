@@ -46,5 +46,6 @@
     "journal_empty": true
   },
   "invariant": "durable intent plus idempotent canonical redo plus local invalidation/reconstruction must prevent stale reads and recover proportional to the recorded affected region rather than total memory",
+  "validation": "the executable verifier requires exact row counts, unique keys, exact key sets, equality of every recorded measurement field, and all safety/correctness booleans true",
   "scope": "deep-copied durable-image simulation with explicit torn phase/canonical boundary tests; single in-flight mutation; no filesystem/database atomicity, concurrent-writer, distributed, or cold/archive recovery claim"
 }
