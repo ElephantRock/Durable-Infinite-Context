@@ -5,6 +5,7 @@ from typing import Any
 
 from state.cascade import context_node, profile_node, state_node, support_node
 from storage.sqlite_recovery import (
+    INVALIDATED,
     UPSERT_ASSERTION,
     PersistentRecoveryTrace,
     _json,
@@ -33,11 +34,22 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
     """
 
     @staticmethod
-    def _growth_specs(intent: sqlite3.Row) -> list[tuple[str, str, str, str | None]]:
+    def _candidate_growth_specs(
+        intent: sqlite3.Row,
+    ) -> list[tuple[str, str, str, str | None]]:
         if intent["operation"] != UPSERT_ASSERTION:
             return []
         payload = _loads(intent["payload_json"], {})
+        previous = _loads(intent["previous_json"], {}) if intent["previous_json"] else {}
         item = assertion_from_dict(payload["assertion"])
+        old_data = previous.get("assertion")
+        old = assertion_from_dict(old_data) if old_data else None
+
+        # Ordinary object-only assertion updates do not grow canonical topology and
+        # must retain the narrower v0.10/v0.11 invalidation path.
+        if old is not None and old.key == item.key:
+            return []
+
         subject = item.subject_id
         predicate = item.predicate
         key = (subject, predicate, "default")
@@ -48,23 +60,41 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
             (context_node(key), "context", subject, predicate),
         ]
 
+    def _growth_specs_tx(
+        self,
+        conn: sqlite3.Connection,
+        intent: sqlite3.Row,
+    ) -> list[tuple[str, str, str, str | None]]:
+        """Return only required outputs that are actually absent at invalidation."""
+
+        missing: list[tuple[str, str, str, str | None]] = []
+        for spec in self._candidate_growth_specs(intent):
+            node_id = spec[0]
+            row = conn.execute(
+                "SELECT 1 FROM derived_nodes WHERE node_id=?",
+                (node_id,),
+            ).fetchone()
+            if row is None:
+                missing.append(spec)
+        return missing
+
     def _affected_nodes(
         self,
         conn: sqlite3.Connection,
         intent: sqlite3.Row,
     ) -> list[str]:
         existing_region = super()._affected_nodes(conn, intent)
-        obligations = [node_id for node_id, _, _, _ in self._growth_specs(intent)]
+        obligations = [node_id for node_id, _, _, _ in self._growth_specs_tx(conn, intent)]
         return sorted(set(existing_region).union(obligations))
 
     def _ensure_growth_nodes_tx(
         self,
         conn: sqlite3.Connection,
-        intent: sqlite3.Row,
+        specs: list[tuple[str, str, str, str | None]],
         trace: PersistentRecoveryTrace | None,
     ) -> int:
         created = 0
-        for node_id, kind, subject, predicate in self._growth_specs(intent):
+        for node_id, kind, subject, predicate in specs:
             cursor = conn.execute(
                 """INSERT OR IGNORE INTO derived_nodes
                    (node_id,kind,subject_id,predicate,scope,status,value_json)
@@ -90,17 +120,23 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
         intent: sqlite3.Row,
         trace: PersistentRecoveryTrace | None = None,
     ) -> list[str]:
-        affected = self._affected_nodes(conn, intent)
-        self._ensure_growth_nodes_tx(conn, intent, trace)
+        # Capture missing obligations before inserting them; once inserted, a second
+        # lookup would correctly report that nothing is missing and lose the set.
+        growth_specs = self._growth_specs_tx(conn, intent)
+        existing_region = super()._affected_nodes(conn, intent)
+        affected = sorted(
+            set(existing_region).union(node_id for node_id, _, _, _ in growth_specs)
+        )
+        self._ensure_growth_nodes_tx(conn, growth_specs, trace)
         conn.executemany(
             "UPDATE derived_nodes SET status='invalid' WHERE node_id=?",
             [(node_id,) for node_id in affected],
         )
         conn.execute(
             """UPDATE maintenance_journal
-               SET phase='invalidated', affected_json=?, partial_node=NULL
+               SET phase=?, affected_json=?, partial_node=NULL
                WHERE intent_id=?""",
-            (_json(affected), intent["intent_id"]),
+            (INVALIDATED, _json(affected), intent["intent_id"]),
         )
         if trace is not None:
             trace.affected_discovered += len(affected)
@@ -117,10 +153,10 @@ class GrowthAwareTopologyStore(PromotionRevalidatedTopologyStore):
                 ).fetchone()[0]
             )
 
-    def required_growth_nodes(self, index_subject: str, predicate: str = "deadline") -> list[str]:
-        key = (index_subject, predicate, "default")
+    def required_growth_nodes(self, subject: str, predicate: str = "deadline") -> list[str]:
+        key = (subject, predicate, "default")
         return [
-            profile_node(index_subject),
+            profile_node(subject),
             state_node(key),
             support_node(key),
             context_node(key),
