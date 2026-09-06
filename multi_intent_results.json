@@ -1,0 +1,81 @@
+{
+  "experiment": "v0.10_durable_multi_intent_concurrency",
+  "storage": {
+    "engine": "sqlite3",
+    "journal_mode": "wal",
+    "synchronous": "FULL",
+    "physical_writer_model": "sqlite_single_writer",
+    "logical_intents": "durable_ordered_queue",
+    "process_failure": "SIGKILL"
+  },
+  "concurrent_admission": {
+    "entity_count": 128,
+    "writer_count": 8,
+    "admitted": 8,
+    "unique_sequences": 8,
+    "sequence_min": 1,
+    "sequence_max": 8,
+    "queue_before": [8, 0, 0, 0],
+    "queue_after": [0, 0, 8, 0],
+    "promotions": 8,
+    "conflicts": 0,
+    "recovery_rounds": 8,
+    "logical_work": 280
+  },
+  "same_key_conflict": {
+    "entity_count": 64,
+    "index": 7,
+    "first_base_version": 0,
+    "second_base_version": 0,
+    "retry_base_version": 1,
+    "statuses": ["done", "conflict", "done"],
+    "final_value": 73,
+    "first_drain_logical_work": 35,
+    "second_drain_logical_work": 35
+  },
+  "phase_aware_reads": {
+    "entity_count": 64,
+    "durable_phase": "canonical_applied",
+    "affected_read_blocked": true,
+    "queued_read_admitted": true,
+    "unrelated_read_admitted": true,
+    "queue_after_crash": [1, 1, 0, 0],
+    "queue_final": [0, 0, 2, 0],
+    "recovery_rounds": 2,
+    "logical_work": 68,
+    "process_failure": "SIGKILL"
+  },
+  "overlapping_derived": {
+    "entity_count": 64,
+    "index": 9,
+    "distinct_write_keys": true,
+    "shared_read_keys": true,
+    "queue_final": [0, 0, 2, 0],
+    "recovery_rounds": 2,
+    "logical_work": 73
+  },
+  "locality_cardinalities": [100, 1000, 10000, 50000],
+  "locality_rows": [
+    [100, 3, 101, 5, 106, 1387],
+    [1000, 3, 101, 5, 106, 13987],
+    [10000, 3, 101, 5, 106, 139987],
+    [50000, 3, 101, 5, 106, 699987]
+  ],
+  "required_true": [
+    "concurrent_admission.semantic_check",
+    "concurrent_admission.materialization_equal",
+    "concurrent_admission.queue_lookup_uses_index",
+    "same_key_conflict.semantic_check",
+    "same_key_conflict.materialization_equal",
+    "phase_aware_reads.semantic_check",
+    "phase_aware_reads.materialization_equal",
+    "overlapping_derived.semantic_check",
+    "overlapping_derived.materialization_equal",
+    "locality.semantic_check",
+    "locality.materialization_equal",
+    "locality.queue_lookup_uses_index",
+    "locality.affected_traversal_uses_index"
+  ],
+  "invariant": "ordered durable admission plus optimistic canonical versions plus the v0.9 single-flight recovery engine must prevent lost updates, recover multiple intents after process death, and block only derived reads that can actually be stale",
+  "scope": "single SQLite database; concurrent OS-process intent admission; SQLite-serialized physical writes; synthetic oracle assertions; no distributed or multi-database claim"
+}
