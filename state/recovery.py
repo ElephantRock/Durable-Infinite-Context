@@ -6,15 +6,7 @@ from enum import Enum
 from itertools import count
 
 from core.models import Assertion, EvidenceRecord
-from state.cascade import (
-    CascadeMaterialization,
-    assertion_node,
-    context_node,
-    evidence_node,
-    profile_node,
-    state_node,
-    support_node,
-)
+from state.cascade import CascadeMaterialization, evidence_node
 from state.dependencies import DependencyTrace, DerivationStatus
 
 
@@ -147,8 +139,6 @@ class RecoveryCoordinator:
             raise ValueError(f"Unsupported maintenance operation: {intent.operation}")
 
     def _invalidate(self, intent: MaintenanceIntent) -> DependencyTrace:
-        before = set(self.graph.invalid_nodes())
-
         if intent.operation == MaintenanceOperation.UPSERT_EVIDENCE:
             if intent.evidence is None:
                 raise ValueError("Evidence intent missing payload")
@@ -194,8 +184,7 @@ class RecoveryCoordinator:
         else:
             raise ValueError(f"Unsupported maintenance operation: {intent.operation}")
 
-        after = set(self.graph.invalid_nodes())
-        intent.affected_node_ids = tuple(sorted(after - before))
+        intent.affected_node_ids = tuple(sorted(trace.invalidated_node_ids))
         return trace
 
     @staticmethod
