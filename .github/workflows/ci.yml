@@ -29,6 +29,7 @@ jobs:
       - run: python verify_growth_results.py
       - run: python verify_predicate_schema_results.py
       - run: python verify_subject_fanout_results.py
+      - run: python verify_compositional_profile_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
