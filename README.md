@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.6
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.7
 
 This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
@@ -11,13 +11,17 @@ This repository implements the falsification-first research prototype for the Du
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, and maintenance-locality workloads.
+- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, and dependency-cascade workloads.
+- Explicit derived lifecycle states: `fresh`, `invalid`, and `rebuilding`.
+- Dependency-aware selective reconstruction and local retirement of unreachable derived metadata.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
 ## What is deliberately **not** claimed
 
 The included `evidence_recency_control` is a smoke-control heuristic; it is **not** the strong agentic hybrid-RAG baseline specified by the research design. The repository deliberately does not fake an LLM agent. Plug a real agent into `rag.baselines.AgenticRAGAdapter` for that comparison.
+
+The current maintenance experiments are in-memory and use oracle assertions. They do not yet establish crash recovery, concurrent/distributed consistency, production storage latency, or real model-extraction maintenance.
 
 ## First experiment
 
@@ -167,6 +171,59 @@ rather than a universal O(1) write claim.
 
 Review hardening fixed hidden broad-posting materialization cost, deterministic same-sequence assertion ordering, and locality-index hydration for restored/pre-populated stores. The hardened CI run passed **38/38 unit tests** and reproduced the v0.4, v0.5, and v0.6 benchmark results. A requested second automated Codex review could not execute because the repository's code-review usage quota was exhausted; the available review findings were all addressed with regressions.
 
+## v0.7 — Dependency-cascade invalidation
+
+v0.7 extends the maintenance test from direct addressability updates to a multi-layer derived dependency path:
+
+\[
+Evidence/Assertion \rightarrow State/Profile \rightarrow Support \rightarrow Context
+\]
+
+New components:
+
+- `state/dependencies.py`: reverse dependency traversal, explicit derived lifecycle, exact dependency-graph parity, and retirement accounting;
+- `state/cascade.py`: integrated state/profile/support/context materialization with selective topological reconstruction;
+- `simulator/cascade.py`: integrated cardinality worlds and synthetic depth × fan-out topology controls;
+- `benchmark/cascade_metrics.py`;
+- `run_cascade_experiment.py`;
+- `RESULTS_V0.7.md` and `cascade_results.json`.
+
+The first v0.7 mechanism passed answer-level correctness and locality, but inspection found a lifecycle defect: deletion left unreachable derived nodes behind as dependency-metadata tombstones. The benchmark was kept fixed while the mechanism was hardened to count dependency-edge removal, retire unreachable nodes locally, and include the entire dependency graph in rebuild-oracle equality.
+
+The hardened GitHub Actions run `33999047206` passed **45/45 unit tests** plus the full v0.4, v0.5, v0.6, and v0.7 experiment sequence.
+
+At 50,000 entities:
+
+- evidence payload replacement: 3 nodes invalidated/rebuilt, 60 incremental operations versus 5,149,752 for full reconstruction;
+- object-only assertion replacement: 3 nodes, 21 versus 5,149,752;
+- explicit correction: 4 nodes, 88 versus 5,149,786;
+- shared evidence with fan-out four: 12 nodes, 270 versus 5,149,994;
+- assertion deletion: 4 nodes rebuilt and then retired, 111 versus 5,149,891.
+
+All integrated rows exactly matched a clean reconstruction, including dependency graph lineage/lifecycle metadata, passed semantic checks, and contained no remaining invalid nodes.
+
+For fixed `depth=4`, `fanout=4`, synthetic invalidation work remained **50** while the total graph grew from 400 to 40,000 derived nodes. Across the controlled depth × fan-out sweep, the observed topology was exactly:
+
+\[
+AffectedNodes = F D
+\]
+
+\[
+InvalidationWork = 2 + 3FD
+\]
+
+under the benchmark's logical-work definition. The evidence therefore supports:
+
+\[
+\boxed{
+MaintenanceCost(\Delta M)
+\propto
+Size(TrueAffectedDependencySubgraph(\Delta M))
+}
+\]
+
+including invalidation, selective reconstruction, edge maintenance, and local retirement.
+
 Run the current planner and maintenance milestones with:
 
 ```bash
@@ -174,8 +231,9 @@ python -m unittest discover -s tests -v
 python run_planner_experiment.py
 python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
+python run_cascade_experiment.py
 ```
 
-Important limitations: v0.6 uses in-memory materializations and oracle assertions; full rebuild is used only as the experiment oracle; distributed consistency, crash recovery, high-fan-out pathological cases, relation-lifecycle cleanup, archive/deletion propagation, and production storage/write amplification remain untested.
+Important limitations: v0.7 is still in-memory and uses oracle assertions. It does not establish atomic canonical-write/invalidation persistence, crash recovery from `REBUILDING`, concurrent writers, distributed dependency consistency, cold/archive traversal, production latency, or real model-extraction cascades.
 
-The next falsification target is **dependency-cascade invalidation**: determine whether corrections/deletions can propagate through multiple layers of derived state with work proportional to the true affected dependency subgraph rather than total memory.
+The next falsification target is **interrupted maintenance / crash recovery**: determine whether canonical changes, invalidation intent, derived lifecycle, reconstruction, and retirement can recover correctly after a crash at arbitrary phases without requiring a global rebuild.
