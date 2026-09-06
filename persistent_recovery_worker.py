@@ -5,7 +5,7 @@ import json
 import os
 import signal
 
-from storage.sqlite_recovery import SQLiteRecoveryStore
+from storage.process_store import PersistentProcessStore
 
 
 FAILPOINTS = {
@@ -26,7 +26,7 @@ def abrupt_kill() -> None:
     raise AssertionError("SIGKILL unexpectedly returned")
 
 
-def crash(store: SQLiteRecoveryStore, operation: str, index: int, failpoint: str) -> None:
+def crash(store: PersistentProcessStore, operation: str, index: int, failpoint: str) -> None:
     if failpoint not in FAILPOINTS:
         raise ValueError(f"unknown failpoint: {failpoint}")
 
@@ -82,7 +82,7 @@ def main() -> None:
     sub.add_parser("inspect")
 
     args = parser.parse_args()
-    store = SQLiteRecoveryStore(args.db)
+    store = PersistentProcessStore(args.db)
 
     if args.command == "bootstrap":
         store.bootstrap(args.entities)
@@ -90,6 +90,7 @@ def main() -> None:
             "settings": store.transaction_settings(),
             "dependency_lookup_uses_index": store.dependency_lookup_uses_index(),
             "clean": store.materialization_matches_clean_rebuild(),
+            "full_rebuild_work": store.full_rebuild_work(),
         }, sort_keys=True))
         return
 
@@ -109,6 +110,7 @@ def main() -> None:
             "all_derived_fresh": store.all_derived_fresh(),
             "journal_empty": store.journal_empty(),
             "materialization_equal": store.materialization_matches_clean_rebuild(),
+            "full_rebuild_work": store.full_rebuild_work(),
         }, sort_keys=True))
         return
 
