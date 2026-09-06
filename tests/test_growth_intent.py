@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from simulator.cascade import subject_id
 from simulator.growth import (
     run_growth_locality_case,
     run_v011_growth_control,
@@ -30,6 +31,29 @@ class GrowthIntentTests(unittest.TestCase):
         self.assertTrue(case["old_subject_retired"])
         self.assertTrue(case["materialization_equal"])
         self.assertTrue(case["all_derived_fresh"])
+
+    def test_new_target_read_is_blocked_between_canonical_commit_and_growth_repair(self):
+        with tempfile.TemporaryDirectory(prefix="dic-v012-growth-gap-") as tmp:
+            store = GrowthAwareTopologyStore(Path(tmp) / "memory.sqlite3")
+            store.bootstrap(24)
+            target_index = 41
+            target_subject = subject_id(target_index)
+
+            intent = store.enqueue_topology_move(12, target_index, writer="growth-gap")
+            promoted = store.promote_next()
+            self.assertIsNotNone(promoted)
+            self.assertEqual(promoted["intent_id"], intent["intent_id"])
+
+            store.apply_canonical_transaction()
+            with self.assertRaises(RuntimeError):
+                store.read_context(target_subject)
+
+            # The protection remains local: an unrelated derived read is admitted.
+            self.assertIsNotNone(store.read_context(subject_id(3)))
+
+            store.recover()
+            self.assertIsNotNone(store.read_context(target_subject))
+            self.assertTrue(store.materialization_matches_clean_rebuild())
 
     def test_object_only_update_does_not_create_growth_obligations(self):
         with tempfile.TemporaryDirectory(prefix="dic-v012-no-growth-") as tmp:
