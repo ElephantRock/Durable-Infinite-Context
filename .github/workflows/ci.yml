@@ -22,3 +22,4 @@ jobs:
       - run: python run_maintenance_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
+      - run: python run_process_recovery_experiment.py
