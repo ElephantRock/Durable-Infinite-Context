@@ -42,7 +42,7 @@ def record_integrated(
     *,
     semantic_check,
 ) -> None:
-    rebuild_trace = materialization.rebuild()
+    rebuild_trace = materialization.rebuild(result.invalidated_node_ids)
     semantic = bool(semantic_check())
     oracle = CascadeMaterialization(clone_canonical_store(materialization.store))
     measurement = measure_cascade(
@@ -162,16 +162,16 @@ def run_integrated_cardinality(n: int) -> list[dict]:
     )
 
     # 4. Establish a shared evidence dependency across four subjects, repair that
-    # setup, then measure only the shared evidence replacement cascade.
+    # setup locally, then measure only the shared evidence replacement cascade.
     shared_eid = f"shared-cascade-{n}"
-    maintainer.upsert_evidence(EvidenceRecord(
+    setup_results: list[CascadeResult] = [maintainer.upsert_evidence(EvidenceRecord(
         shared_eid, "SharedBeacon portfolio marker.", "source", n + 3
-    ))
+    ))]
     fanout_indices = tuple(sorted({n // 10, 3 * n // 10, 7 * n // 10, 9 * n // 10}))
     fanout_indices = tuple(i for i in fanout_indices if 0 <= i < n)
     for i in fanout_indices:
         old = store.assertions[assertion_id(i)]
-        maintainer.upsert_assertion(Assertion(
+        setup_results.append(maintainer.upsert_assertion(Assertion(
             old.id,
             old.subject_id,
             old.predicate,
@@ -180,8 +180,9 @@ def run_integrated_cardinality(n: int) -> list[dict]:
             valid_from=old.valid_from,
             valid_to=old.valid_to,
             evidence_ids=tuple(dict.fromkeys((*old.evidence_ids, shared_eid))),
-        ))
-    materialization.rebuild()
+        )))
+    setup = combine_results("shared_setup", *setup_results)
+    materialization.rebuild(setup.invalidated_node_ids)
 
     result = maintainer.upsert_evidence(EvidenceRecord(
         shared_eid, "SharedNova portfolio marker.", "source", n + 4
@@ -227,7 +228,6 @@ def run_integrated_cardinality(n: int) -> list[dict]:
 def run_topology_sweeps() -> list[dict]:
     rows: list[dict] = []
 
-    # Cardinality control: fixed affected region while unrelated graph size grows.
     for total_branches in (100, 1_000, 10_000):
         case = build_topology_case(total_branches, depth=4, fanout=4)
         trace = case.graph.invalidate_from([case.root_id])
@@ -249,7 +249,6 @@ def run_topology_sweeps() -> list[dict]:
             raise AssertionError(f"topology cardinality locality failed at branches={total_branches}")
         rows.append(measurement)
 
-    # Depth × fan-out control at fixed global graph size.
     for depth in (1, 2, 4, 8):
         for fanout in (1, 4, 16, 64):
             case = build_topology_case(1_024, depth=depth, fanout=fanout)

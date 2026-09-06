@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -27,6 +27,7 @@ class DependencyTrace:
     profile_work: int = 0
     materialization_reads: int = 0
     materialization_writes: int = 0
+    invalidated_node_ids: set[str] = field(default_factory=set, repr=False)
 
     @property
     def logical_work(self) -> int:
@@ -62,6 +63,7 @@ class DependencyTrace:
         self.profile_work += other.profile_work
         self.materialization_reads += other.materialization_reads
         self.materialization_writes += other.materialization_writes
+        self.invalidated_node_ids.update(other.invalidated_node_ids)
 
 
 class DependencyGraph:
@@ -144,7 +146,9 @@ class DependencyGraph:
         """Invalidate registered descendants of canonical or derived roots.
 
         Traversal is duplicate-safe and its work is proportional to the reachable
-        dependency subgraph, not to the total graph cardinality.
+        dependency subgraph, not to the total graph cardinality. The trace carries
+        the exact newly-invalidated node IDs so callers never need a whole-graph
+        ``invalid_nodes()`` scan merely to identify the affected region.
         """
 
         roots = tuple(dict.fromkeys(root_ids))
@@ -161,6 +165,7 @@ class DependencyGraph:
                 if self._status.get(dependent) != DerivationStatus.INVALID:
                     self._status[dependent] = DerivationStatus.INVALID
                     trace.nodes_invalidated += 1
+                    trace.invalidated_node_ids.add(dependent)
                 if dependent not in seen:
                     seen.add(dependent)
                     queue.append(dependent)
@@ -176,6 +181,7 @@ class DependencyGraph:
                 if self._status[node_id] != DerivationStatus.INVALID:
                     self._status[node_id] = DerivationStatus.INVALID
                     trace.nodes_invalidated += 1
+                    trace.invalidated_node_ids.add(node_id)
                 roots.append(node_id)
         if roots:
             downstream = self.invalidate_from(roots)

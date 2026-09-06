@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.7
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.8
 
 This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
 
@@ -11,9 +11,11 @@ This repository implements the falsification-first research prototype for the Du
 - Current, historical-valid-time, and historical-knowledge-time queries.
 - Contested-state preservation.
 - Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, and dependency-cascade workloads.
+- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, dependency-cascade, and crash-recovery workloads.
 - Explicit derived lifecycle states: `fresh`, `invalid`, and `rebuilding`.
 - Dependency-aware selective reconstruction and local retirement of unreachable derived metadata.
+- Scan-free affected-region discovery as the canonical cascade-maintenance path.
+- A single-flight durable maintenance-intent prototype with idempotent canonical redo and stale-read blocking during recovery.
 - Architecture-neutral evaluator and instrumentation-ready interfaces.
 - A pluggable `AgenticRAGAdapter` integration seam.
 
@@ -21,7 +23,7 @@ This repository implements the falsification-first research prototype for the Du
 
 The included `evidence_recency_control` is a smoke-control heuristic; it is **not** the strong agentic hybrid-RAG baseline specified by the research design. The repository deliberately does not fake an LLM agent. Plug a real agent into `rag.baselines.AgenticRAGAdapter` for that comparison.
 
-The current maintenance experiments are in-memory and use oracle assertions. They do not yet establish crash recovery, concurrent/distributed consistency, production storage latency, or real model-extraction maintenance.
+The current recovery experiment still uses an in-memory graph and a deep-copied durable-image simulation. It does **not** yet establish real filesystem/database durability, fsync behavior, process-crash persistence, concurrent/distributed consistency, production storage latency, or real model-extraction maintenance.
 
 ## First experiment
 
@@ -190,7 +192,7 @@ New components:
 
 The first v0.7 mechanism passed answer-level correctness and locality, but inspection found a lifecycle defect: deletion left unreachable derived nodes behind as dependency-metadata tombstones. The benchmark was kept fixed while the mechanism was hardened to count dependency-edge removal, retire unreachable nodes locally, and include the entire dependency graph in rebuild-oracle equality.
 
-The hardened GitHub Actions run `33999047206` passed **45/45 unit tests** plus the full v0.4, v0.5, v0.6, and v0.7 experiment sequence.
+A later v0.8 audit found a second issue in the v0.7 operational wrapper: affected-node discovery scanned the global invalid-node set before and after mutation even though traversal itself was local. The recorded v0.7 ledger reproduced through a scan-free replacement, and v0.8 promoted that replacement into the canonical `CascadeMaintainer` path.
 
 At 50,000 entities:
 
@@ -212,28 +214,68 @@ AffectedNodes = F D
 InvalidationWork = 2 + 3FD
 \]
 
-under the benchmark's logical-work definition. The evidence therefore supports:
+under the benchmark's logical-work definition.
+
+## v0.8 — Interrupted maintenance / crash recovery
+
+v0.8 adds a recovery coordinator and durable-intent state machine around canonical mutation and derived maintenance:
+
+\[
+Intent
+\rightarrow CanonicalRedo
+\rightarrow Invalidate
+\rightarrow Rebuild/Retire
+\rightarrow CommitMaintenance
+\]
+
+Key components:
+
+- `state/recovery.py`: durable-intent phases, stale-read blocking, partial-`REBUILDING` recovery, and idempotent canonical redo;
+- `simulator/recovery.py`: phase-boundary and cardinality recovery scenarios;
+- `benchmark/recovery_metrics.py`;
+- `run_recovery_experiment.py`;
+- `verify_recovery_results.py`;
+- `RESULTS_V0.8.md` and `recovery_results.json`.
+
+The first recovery mechanism was falsified by an inverse torn-boundary test: the journal phase marker could say `CANONICAL_APPLIED` while the canonical write itself was absent. The mechanism was revised to redo canonical mutation idempotently for both `PREPARED` and `CANONICAL_APPLIED` recovery.
+
+Redo safety is tested for evidence upsert, assertion upsert, and assertion deletion. The hardened unit surface reached **60/60 passing** before the recovery ledger was regenerated.
+
+At N=100, redo-safe recovery work is:
+
+| Operation | Prepared | Canonical applied | Invalidated | Rebuilding | Repaired |
+|---|---:|---:|---:|---:|---:|
+| Evidence payload | 67 | 66 | 53 | 36 | 3 |
+| Assertion object | 28 | 27 | 16 | 26 | 3 |
+| Delete assertion | 116 | 115 | 101 | 35 | 3 |
+
+The strongest locality case interrupts deletion with one partial derived write left `REBUILDING`. Recovery remains **35 logical operations** while total entity cardinality grows from 100 to 50,000; clean reconstruction grows from 9,977 to 5,149,651 logical operations.
+
+The surviving prototype-level invariant is:
 
 \[
 \boxed{
-MaintenanceCost(\Delta M)
-\propto
-Size(TrueAffectedDependencySubgraph(\Delta M))
+DurableIntent + IdempotentCanonicalRedo + RecordedAffectedRegion
+\Rightarrow
+NoStaleRead + LocalIdempotentRecovery
 }
 \]
 
-including invalidation, selective reconstruction, edge maintenance, and local retirement.
+The final CI verifier requires exact row counts, unique keys, exact ledger key sets, equality of every recorded measurement field, and all safety/correctness booleans true. This is still a simulated durable image, not real storage-engine evidence.
 
-Run the current planner and maintenance milestones with:
+Run the current planner, maintenance, cascade, and recovery milestones with:
 
 ```bash
 python -m unittest discover -s tests -v
 python run_planner_experiment.py
 python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
-python run_cascade_experiment.py
+python verify_scanfree_cascade_results.py
+python verify_recovery_results.py
 ```
 
-Important limitations: v0.7 is still in-memory and uses oracle assertions. It does not establish atomic canonical-write/invalidation persistence, crash recovery from `REBUILDING`, concurrent writers, distributed dependency consistency, cold/archive traversal, production latency, or real model-extraction cascades.
+## Next falsification target — v0.9 persistent WAL / real process-crash recovery
 
-The next falsification target is **interrupted maintenance / crash recovery**: determine whether canonical changes, invalidation intent, derived lifecycle, reconstruction, and retirement can recover correctly after a crash at arbitrary phases without requiring a global rebuild.
+Move the maintenance journal and canonical/derived records into a transactional persistent store. Kill a separate process at controlled boundaries, then start a fresh process, reopen storage, drain recovery, and require exact clean-reconstruction parity without global affected-region scans.
+
+Only after actual storage/process durability survives should the project add overlapping writers or multi-intent concurrency.

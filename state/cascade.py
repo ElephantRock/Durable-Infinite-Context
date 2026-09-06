@@ -87,8 +87,6 @@ class CascadeMaterialization:
         self._subject_by_profile_node: dict[str, str] = {}
         self.build_trace = DependencyTrace(profile_work=self.index.build_trace.logical_work)
 
-        # State is a derived projection. Bootstrap from canonical assertions rather
-        # than trusting any pre-existing materialized cells.
         self.store.state.clear()
         self._bootstrap()
 
@@ -284,12 +282,6 @@ class CascadeMaterialization:
         rebuilt_node_ids: set[str],
         trace: DependencyTrace,
     ) -> None:
-        """Retire only rebuilt nodes whose canonical basis is now absent.
-
-        Candidate discovery is restricted to the locally rebuilt set. This avoids
-        turning cleanup itself into a global scan over dependency metadata.
-        """
-
         subjects: set[str] = set()
         keys: set[StateKey] = set()
         for node_id in rebuilt_node_ids:
@@ -320,7 +312,6 @@ class CascadeMaterialization:
             if assertions:
                 continue
 
-            # Retire leaf-to-root so no dependency edge is left dangling.
             nodes = (context_node(key), support_node(key), state_node(key))
             statuses = [
                 self.graph.status_of(node_id)
@@ -336,7 +327,12 @@ class CascadeMaterialization:
                 self._key_by_node.pop(node_id, None)
 
     def rebuild(self, target_node_ids: Iterable[str] | None = None) -> DependencyTrace:
-        """Rebuild invalid targets and retire locally unreachable derivations."""
+        """Rebuild invalid targets and retire locally unreachable derivations.
+
+        Production maintenance paths should always pass the exact affected IDs
+        emitted by invalidation. The no-argument form remains only as an explicit
+        diagnostic/full-scan fallback for tests and reconstruction tooling.
+        """
 
         targets = (
             tuple(target_node_ids)
@@ -419,8 +415,6 @@ class CascadeMaterialization:
 
 
 def clone_canonical_store(store: MemoryStore) -> MemoryStore:
-    """Clone authoritative fields while deliberately discarding derived state."""
-
     return MemoryStore(
         evidence=dict(store.evidence),
         assertions=dict(store.assertions),
@@ -429,36 +423,38 @@ def clone_canonical_store(store: MemoryStore) -> MemoryStore:
 
 
 class CascadeMaintainer:
-    """Apply canonical mutations, invalidate descendants, rebuild only on demand."""
+    """Canonical scan-free mutation/invalidation wrapper.
+
+    A mutation returns the exact affected node IDs emitted by dependency traversal.
+    It never discovers the affected region by scanning the global lifecycle set.
+    Callers should feed ``result.invalidated_node_ids`` directly into
+    ``CascadeMaterialization.rebuild``.
+    """
 
     def __init__(self, materialization: CascadeMaterialization):
         self.materialization = materialization
         self.store = materialization.store
         self.graph = materialization.graph
 
-    def _result(
-        self,
-        operation: str,
-        before: set[str],
-        trace: DependencyTrace,
-    ) -> CascadeResult:
-        after = set(self.graph.invalid_nodes())
-        return CascadeResult(operation, tuple(sorted(after - before)), trace)
+    @staticmethod
+    def _result(operation: str, trace: DependencyTrace) -> CascadeResult:
+        return CascadeResult(
+            operation,
+            tuple(sorted(trace.invalidated_node_ids)),
+            trace,
+        )
 
     def upsert_evidence(self, item: EvidenceRecord) -> CascadeResult:
-        before = set(self.graph.invalid_nodes())
         self.store.add_evidence(item)
         trace = self.graph.invalidate_from([evidence_node(item.id)])
-        return self._result("upsert_evidence", before, trace)
+        return self._result("upsert_evidence", trace)
 
     def delete_evidence(self, evidence_id: str) -> CascadeResult:
-        before = set(self.graph.invalid_nodes())
         self.store.remove_evidence(evidence_id)
         trace = self.graph.invalidate_from([evidence_node(evidence_id)])
-        return self._result("delete_evidence", before, trace)
+        return self._result("delete_evidence", trace)
 
     def upsert_assertion(self, item: Assertion) -> CascadeResult:
-        before_invalid = set(self.graph.invalid_nodes())
         previous = self.store.assertions.get(item.id)
         old_key = previous.key if previous is not None else None
         old_subject = previous.subject_id if previous is not None else None
@@ -481,10 +477,9 @@ class CascadeMaintainer:
                 seeds.add(self.materialization.ensure_profile(subject_id))
 
         trace = self.graph.invalidate_nodes(seeds)
-        return self._result("upsert_assertion", before_invalid, trace)
+        return self._result("upsert_assertion", trace)
 
     def delete_assertion(self, assertion_id: str) -> CascadeResult:
-        before_invalid = set(self.graph.invalid_nodes())
         previous = self.store.assertions.get(assertion_id)
         if previous is None:
             return CascadeResult("delete_assertion", (), DependencyTrace())
@@ -494,10 +489,9 @@ class CascadeMaintainer:
             self.materialization.ensure_profile(previous.subject_id),
         }
         trace = self.graph.invalidate_nodes(seeds)
-        return self._result("delete_assertion", before_invalid, trace)
+        return self._result("delete_assertion", trace)
 
     def add_relation(self, relation: AssertionRelation) -> CascadeResult:
-        before_invalid = set(self.graph.invalid_nodes())
         self.store.add_relation(relation)
         keys: set[StateKey] = set()
         source = self.store.assertions.get(relation.source_assertion_id)
@@ -508,4 +502,4 @@ class CascadeMaintainer:
             keys.add(target.key)
         seeds = {self.materialization.ensure_state_chain(key)[0] for key in keys}
         trace = self.graph.invalidate_nodes(seeds)
-        return self._result("add_relation", before_invalid, trace)
+        return self._result("add_relation", trace)
