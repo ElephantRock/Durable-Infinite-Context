@@ -6,8 +6,14 @@ from pathlib import Path
 import run_cascade_experiment as legacy
 from state.cascade import CascadeMaterialization, clone_canonical_store
 from state.scanfree_cascade import ScanFreeCascadeMaintainer
+from verify_cascade_results import (
+    _compare_recorded_integrated,
+    _compare_recorded_topology,
+    _require_equal,
+)
 
 ROOT = Path(__file__).resolve().parent
+RESULTS_PATH = ROOT / "cascade_results.json"
 
 
 def local_record_integrated(
@@ -44,20 +50,24 @@ def local_record_integrated(
 
 
 def main() -> None:
-    expected_path = ROOT / "cascade_results.json"
-    expected = json.loads(expected_path.read_text())
+    recorded_text = RESULTS_PATH.read_text()
+    recorded = json.loads(recorded_text)
 
-    # Keep the original v0.7 scenario definitions and acceptance metrics fixed;
-    # replace only the hidden whole-graph affected-region discovery mechanism.
+    # Keep the original v0.7 scenario definitions and recorded acceptance metrics
+    # fixed; replace only the hidden whole-graph affected-region discovery path.
     legacy.CascadeMaintainer = ScanFreeCascadeMaintainer
     legacy.record_integrated = local_record_integrated
     observed = legacy.run()
 
-    if observed != expected:
-        raise AssertionError(
-            "scan-free v0.7 reproduction differs from committed cascade_results.json"
-        )
-    print("SCANFREE_CASCADE_RESULTS_MATCH")
+    _require_equal("experiment", recorded["experiment"], observed["experiment"])
+    _require_equal("cardinalities", recorded["cardinalities"], observed["cardinalities"])
+    _compare_recorded_integrated(recorded, observed)
+    _compare_recorded_topology(recorded, observed)
+
+    # run() writes its verbose raw result to the ledger path. Restore the compact,
+    # committed record so verification is non-destructive.
+    RESULTS_PATH.write_text(recorded_text)
+    print("RECORDED_CASCADE_RESULTS_MATCH_SCANFREE_EXECUTABLE_EXPERIMENT")
 
 
 if __name__ == "__main__":
