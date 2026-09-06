@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
+from simulator.cascade import assertion_id, subject_id
 from simulator.topology import (
     run_topology_locality_case,
     run_v010_topology_control,
     run_v011_topology_revalidation_case,
 )
+from storage.topology_intent import PromotionRevalidatedTopologyStore
 
 
 class TopologyIntentTests(unittest.TestCase):
@@ -38,6 +42,43 @@ class TopologyIntentTests(unittest.TestCase):
         self.assertTrue(case["revalidation_lookup_uses_index"])
         self.assertTrue(case["semantic_check"])
         self.assertTrue(case["materialization_equal"])
+
+    def test_admission_previous_snapshot_is_guarded_by_same_write_key_version(self):
+        """A stale previous_json snapshot must conflict rather than execute.
+
+        Topology-derived read keys can change because another write key changes the
+        dependency graph, so v0.11 revalidates them at promotion. The assertion
+        snapshot in previous_json is different: it is guarded by the assertion's
+        own optimistic write-key version. Two moves admitted from the same version
+        therefore cannot both execute.
+        """
+
+        with tempfile.TemporaryDirectory(prefix="dic-v011-version-guard-") as tmp:
+            store = PromotionRevalidatedTopologyStore(Path(tmp) / "memory.sqlite3")
+            store.bootstrap(48)
+
+            first = store.enqueue_topology_move(30, 5, writer="first-move")
+            second = store.enqueue_topology_move(30, 7, writer="stale-second-move")
+            self.assertEqual(first["base_version"], second["base_version"])
+
+            promoted = store.promote_next()
+            self.assertIsNotNone(promoted)
+            self.assertEqual(promoted["intent_id"], first["intent_id"])
+            store.recover()
+
+            stale = store.promote_next()
+            self.assertIsNotNone(stale)
+            self.assertEqual(stale["intent_id"], second["intent_id"])
+            self.assertEqual(stale["status"], "conflict")
+            self.assertGreater(stale["current_version"], stale["base_version"])
+
+            with store.connect() as conn:
+                assertion = store._get_assertion(conn, assertion_id(30))
+            self.assertIsNotNone(assertion)
+            self.assertEqual(assertion.subject_id, subject_id(5))
+            self.assertEqual(store.queue_counts()["conflict"], 1)
+            self.assertTrue(store.journal_empty())
+            self.assertTrue(store.materialization_matches_clean_rebuild())
 
     def test_topology_revalidation_work_is_local_to_fixed_intents(self):
         small = run_topology_locality_case(64)
