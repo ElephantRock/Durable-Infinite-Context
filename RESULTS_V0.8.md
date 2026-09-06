@@ -156,7 +156,17 @@ The recovery verifier then intentionally rejected the old pre-redo ledger at the
 expected 65, observed 66
 ```
 
-The observed run simultaneously showed exact parity and the updated redo-safe values for all three `canonical_applied` rows. Those observed measurements are now recorded in `recovery_results.json` and must reproduce on the final head before merge.
+The observed run simultaneously showed exact parity and the updated redo-safe values for all three `canonical_applied` rows. Those observed measurements are now recorded in `recovery_results.json`.
+
+The final verifier is additionally hardened to require:
+
+- exact phase/locality row counts;
+- unique row keys;
+- exact observed-vs-recorded key sets;
+- equality of every recorded measurement field;
+- all required safety/correctness booleans true.
+
+The final PR head must reproduce both the v0.7 compact ledger through the canonical scan-free path and this v0.8 redo-safe ledger before merge.
 
 ## What the evidence supports
 
