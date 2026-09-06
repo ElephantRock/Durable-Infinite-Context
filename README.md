@@ -261,7 +261,7 @@ NoStaleRead + LocalIdempotentRecovery
 }
 \]
 
-This is still a simulated durable image, not real storage-engine evidence.
+The final CI verifier requires exact row counts, unique keys, exact ledger key sets, equality of every recorded measurement field, and all safety/correctness booleans true. This is still a simulated durable image, not real storage-engine evidence.
 
 Run the current planner, maintenance, cascade, and recovery milestones with:
 
