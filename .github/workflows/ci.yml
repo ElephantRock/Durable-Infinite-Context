@@ -21,3 +21,4 @@ jobs:
       - run: python run_scalable_planner_experiment.py
       - run: python run_maintenance_experiment.py
       - run: python verify_cascade_results.py
+      - run: python run_recovery_experiment.py
