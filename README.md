@@ -1,314 +1,188 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.9
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.11
 
-This repository implements the falsification-first research prototype for the Durable Infinite Context architecture.
+This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit in the model context window.
 
-## What is implemented
+The working target is:
 
-- Canonical evidence records.
-- Derived assertions with source lineage.
-- Explicit `corrects` and `supersedes` relations.
-- Deterministic state reconciliation.
-- Current, historical-valid-time, and historical-knowledge-time queries.
-- Contested-state preservation.
-- Rule-based context compilation.
-- Synthetic correction, transition, conflict, scaling, retrieval, planner, query-resolution, maintenance-locality, dependency-cascade, crash-recovery, and process-crash workloads.
-- Explicit derived lifecycle states: `fresh`, `invalid`, and `rebuilding`.
-- Dependency-aware selective reconstruction and local retirement of unreachable derived metadata.
-- Scan-free affected-region discovery as the canonical cascade-maintenance path.
-- A single-flight durable maintenance-intent prototype with idempotent canonical redo and stale-read blocking during recovery.
-- SQLite WAL / `synchronous=FULL` persistence with actual `SIGKILL` failpoints and fresh-process recovery.
-- Indexed recursive dependency traversal for persistent affected-region discovery.
-- Architecture-neutral evaluator and instrumentation-ready interfaces.
-- A pluggable `AgenticRAGAdapter` integration seam.
+\[
+C_t = F(q_t, M_t), \qquad |C_t| \le B
+\]
+
+while durable memory can continue to grow. The project is not attempting to prove that an actually infinite context window exists. It is testing whether bounded, task-relevant context can be reconstructed from indefinitely growing durable state with correct revision semantics and tractable operational cost.
+
+## Governing research discipline
+
+The project follows:
+
+**Observe → Diagnose → Derive → Hypothesize → Predict → Test → Revise → Engineer**
+
+Architecture is treated as a surviving hypothesis, not as the goal. If a simpler mechanism matches the evidence, complexity should be removed. If an experiment contradicts the mechanism, the mechanism is revised while the falsification target remains fixed.
+
+## Current surviving architecture
+
+The current prototype contains:
+
+- canonical evidence records;
+- derived assertions with source lineage;
+- explicit correction/supersession relations;
+- deterministic reconciliation with contested-state preservation;
+- current and historical valid/knowledge-time queries;
+- bounded rule-based context compilation;
+- selective state materialization;
+- multi-dimensional retrieval/addressability;
+- non-oracle deterministic query planning over oracle assertions;
+- scalable indexed candidate generation;
+- incremental addressability maintenance;
+- dependency-aware invalidation, selective reconstruction, and local retirement;
+- explicit derived lifecycle states (`fresh`, `invalid`, `rebuilding`);
+- crash-safe maintenance intent handling;
+- SQLite WAL / `synchronous=FULL` persistent recovery with actual `SIGKILL` failpoints;
+- indexed recursive dependency traversal;
+- durable ordered multi-intent admission with optimistic canonical versions;
+- snapshot-consistent derived reads;
+- promotion-time revalidation of topology-dependent intent impact metadata;
+- machine-readable result ledgers with executable replay verifiers for the hardened maintenance/recovery milestones;
+- a pluggable `AgenticRAGAdapter` seam for the still-required strong baseline comparison.
+
+A useful current decomposition is:
+
+\[
+\boxed{
+Evidence
++ Assertions
++ SelectiveState
++ Addressability
++ Coverage
++ BoundedCompilation
++ LocalMaintenance
++ DurableRecovery
++ OrderedIntentAdmission
++ TopologyRevalidation
+}
+\]
+
+This decomposition is provisional and remains subject to falsification.
 
 ## What is deliberately **not** claimed
 
-The included `evidence_recency_control` is a smoke-control heuristic; it is **not** the strong agentic hybrid-RAG baseline specified by the research design. The repository deliberately does not fake an LLM agent. Plug a real agent into `rag.baselines.AgenticRAGAdapter` for that comparison.
+The included `evidence_recency_control` is a smoke-control heuristic. It is **not** the strong agentic hybrid-RAG baseline required by the research design. The repository deliberately does not fake an LLM agent.
 
-v0.9 establishes a controlled single-writer process-crash result over one SQLite database in WAL mode with `synchronous=FULL`. It does **not** establish hardware power-loss guarantees beyond the storage stack, concurrent-writer correctness, distributed consistency, replica recovery, cold/archive recovery, production storage latency, or real model-extraction maintenance.
+The current evidence also does **not** establish:
 
-## First experiment
+- a production entity linker or production semantic embedding model;
+- real model extraction accuracy (assertions remain oracle-provided in the current planner/maintenance experiments);
+- distributed or multi-database consistency;
+- replica recovery;
+- hardware power-loss guarantees beyond the tested SQLite/storage stack;
+- arbitrary multi-writer database execution (SQLite remains the physical single writer);
+- production latency/cost performance;
+- cold/archive recovery;
+- arbitrary topology growth into previously nonexistent derived materializations;
+- a strong agentic-RAG superiority result.
 
-The default run creates:
+A genuine strong agentic retrieval baseline and real extraction remain mandatory before accepting the architecture as broadly superior.
 
-- 250 correction timelines,
-- 250 transition timelines,
-- 250 unresolved-conflict timelines,
-- 2,500 deterministic query cases.
+## Milestone ledger
 
-It compares:
+| Version | Falsification target | Main surviving result |
+|---|---|---|
+| v0.1 | Is persistent state semantically necessary? | No. Assertions-on-demand and persistent state tied under oracle retrieval; state only earned a prospective efficiency role. |
+| v0.2 | Does materialized state earn write complexity? | Selective state materialization can reduce current-state reconstruction from history-depth-dependent work to one state read. |
+| v0.3 | Are semantic similarity and one retrieval channel sufficient? | No. Identity and time are independent address dimensions; adaptive coverage prevents controlled premature closure. |
+| v0.4 | Does addressability survive removal of the oracle query plan? | In controlled language, 200/200 resolvable cases matched the oracle plan and 60/60 irreducibly ambiguous cases abstained. |
+| v0.5 | Can query resolution avoid O(N) subject scans? | Yes in the controlled benchmark after a noisy-alias failure forced a separator-fragment address channel; indexed resolution remained accurate through 50k entities. |
+| v0.6 | Can address indexes be maintained locally? | Fixed-local mutations stayed roughly constant while full rebuild work grew with total memory; shared evidence scaled with true fan-out. |
+| v0.7 | Can multi-layer invalidation/rebuild remain local? | Yes for the tested dependency DAGs; later audit exposed and removed hidden whole-graph invalid-node discovery. |
+| v0.8 | Can interrupted maintenance recover without stale reads? | Initial phase-only mechanism failed a torn-boundary test; idempotent canonical redo repaired the protocol. |
+| v0.9 | Do the crash invariants survive real persistence/process death? | SQLite WAL + `synchronous=FULL` passed 33 real-`SIGKILL` cases; fixed-region recovery stayed local through 50k entities. |
+| v0.10 | Do multiple durable logical intents preserve conflict/recovery semantics? | Concurrent admission, explicit same-key conflict, local read protection, and fixed three-intent recovery passed; a snapshot race was found and fixed before merge. |
+| v0.11 | Can admission-time impact metadata become stale after earlier topology changes? | Yes—the v0.10 control leaked a stale read. Promotion-time topology revalidation closes that leak while preserving local work in the controlled sweep. |
 
-1. `evidence_recency_control` — evidence/recency heuristic without reconciliation.
-2. `assertions_on_demand` — reconcile assertions at query time.
-3. `persistent_state` — materialize current state on write and descend to assertions for historical queries.
+Detailed narratives and machine-readable results live in the versioned `RESULTS_V0.*.md` and `*_results.json` files.
 
-This first run tests semantic correctness only. It is not yet a retrieval benchmark.
+## Selected validated measurements
 
-## Run
+### v0.5 scalable resolution
 
-From this directory:
+After revision, the controlled resolver reached 100% exact-plan accuracy and candidate recall on resolvable workloads through 50,000 entities, while irreducible ambiguity retained 100% abstention. A negative result is preserved: at small entity universes the indexed/fuzzy machinery can cost more than direct scanning, supporting **adaptive** rather than universal indexing.
 
-```bash
-python -m unittest discover -s tests -v
-python run_experiment.py
-```
+### v0.6 local index maintenance
 
-## Interpretation
+At 50,000 entities, representative incremental logical work versus rebuild was:
 
-The most important first ablation is `assertions_on_demand` versus `persistent_state`.
+- evidence payload replacement: 36 vs ~4.40M;
+- predicate change: 88 vs ~4.40M;
+- evidence shared by four subjects: 172 vs ~4.40M.
 
-If they have equal semantic accuracy under oracle retrieval, persistent state has not yet demonstrated a correctness advantage; its prospective value would instead be read efficiency, context compression, and incremental maintenance. Those require the next experiment with cost instrumentation and real retrieval.
+The supported claim is locality to the true affected region, not universal O(1) writes.
 
-A strong agentic RAG comparison remains mandatory before accepting the architecture.
+### v0.7 dependency cascade
 
-## v0.2 — State materialization scaling experiment
-
-The repository also contains:
-
-- indexed per-key assertion access so on-demand reconciliation is not penalized by a full-store scan;
-- logical read/context cost instrumentation (`benchmark/costs.py`);
-- controlled long-history scenarios (`simulator/scaling.py`);
-- an incremental current-state materializer with explicit fallback accounting (`state/incremental.py`);
-- relevant-history scaling (`run_scaling_experiment.py`);
-- read/write tradeoff analysis (`run_tradeoff_experiment.py`);
-- total-memory cardinality scaling (`run_cardinality_experiment.py`);
-- `RESULTS_V0.2.md` with interpretation and limitations.
-
-The v0.2 result narrows the hypothesis: persistent current state is not necessary for semantic correctness or bounded context under oracle retrieval; it earns value as a selective materialization for read-heavy evolving state.
-
-## v0.3 — Selective addressability and coverage control
-
-v0.3 adds real candidate retrieval while deliberately retaining oracle extraction and an oracle-resolved entity/predicate/time query plan. This isolates retrieval/addressability before planner and extraction errors are introduced.
-
-New components:
-
-- `rag/retrieval.py`: lexical, deterministic concept-semantic, hybrid-text, identity/predicate/time constrained retrieval, plus adaptive coverage control;
-- `simulator/retrieval.py`: semantic-saturation, identity-collision, and temporal-disambiguation workloads;
-- `benchmark/retrieval_metrics.py`: Recall@Budget-style support metrics and candidate-region instrumentation;
-- `run_retrieval_experiment.py`;
-- `run_coverage_experiment.py`;
-- `RESULTS_V0.3.md`.
-
-Important limitation: the v0.3 planner receives oracle-resolved structured constraints. The benchmark therefore tests the value of multiple address dimensions once resolved; it does not claim natural-language entity resolution or planner reliability.
-
-## v0.4 — Non-oracle query planning
-
-v0.4 removes the oracle query plan while retaining oracle assertions. The deterministic planner receives only user-visible question text plus subject profiles derived from memory.
-
-New components:
-
-- `rag/planner.py`: identity, predicate, intent, and temporal plan inference with explicit ambiguity preservation;
-- `rag/planned.py`: multi-address retrieval from inferred plans without reading hidden `QueryCase` identity/predicate/time fields;
-- `simulator/planner.py`: unique-identity, contextual-collision, irreducible-ambiguity, and temporal workloads;
-- `benchmark/planner_metrics.py`;
-- `run_planner_experiment.py`;
-- `RESULTS_V0.4.md` and `planner_results.json`.
-
-The controlled benchmark contains 260 cases. All 200 resolvable cases matched the oracle plan and complete-support retrieval, while all 60 intentionally underdetermined identity cases abstained with zero over-resolution.
-
-Important limitation: v0.4 scores every subject profile at query time. It validates the semantics of conditional hard-constraint formation, not scalable identity resolution.
-
-## v0.5 — Scalable query resolution
-
-v0.5 replaces the v0.4 full subject-profile scan with a rebuildable candidate-generation materialization:
-
-- `rag/scalable_planner.py`: exact token, separator-fragment, and four-character n-gram postings with bounded profile scoring;
-- `simulator/scalable_planner.py`: cardinality, typo/noise, contextual-disambiguation, and irreducible-ambiguity workloads;
-- `benchmark/scalable_planner_metrics.py`: candidate recall and logical query-work instrumentation;
-- `run_scalable_planner_experiment.py`;
-- `RESULTS_V0.5.md` and `scalable_planner_results.json`.
-
-The first v0.5 mechanism was partially falsified: noisy aliases/descriptors reached only 90% exact-plan accuracy and about 95% candidate recall at scale. The resolver was revised by adding a separator-fragment address channel while leaving the benchmark unchanged.
-
-After revision, all resolvable workloads reached 100% exact-plan accuracy and 100% candidate recall through 50,000 entities. Irreducible ambiguity retained 100% abstention and 0% over-resolution.
-
-At 50,000 entities:
-
-- exact unique identity: 1 profile scored, 11 logical query operations on average;
-- noisy unique identity: 30.45 profiles scored, 184.3 logical operations;
-- exact contextual identity: 1 profile scored, 12 logical operations;
-- noisy contextual identity: 30.45 profiles scored, 187.3 logical operations;
-- irreducible ambiguity: 0 profiles scored, 9 logical operations.
-
-The corresponding logical-work fractions relative to an N-profile scan are approximately 0.00022, 0.003686, 0.00024, 0.003746, and 0.00018.
-
-A negative result is preserved: at only 100 entities, the indexed/fuzzy machinery can cost more than a direct scan. The evidence therefore supports **adaptive resolution** rather than universal indexing: small candidate universes may use direct scanning, while large universes use indexed candidate generation.
-
-Important limitations: assertions are still oracle-provided; the language is controlled and synthetic; the resolver is not a production entity linker; and a genuine agentic-RAG baseline plus real extraction remain mandatory later comparisons.
-
-## v0.6 — Incremental addressability maintenance
-
-v0.6 tests whether the v0.5 query-resolution materialization can remain correct under canonical mutations without a full-memory rebuild on every write.
-
-New components and changes:
-
-- `MemoryStore` subject-local assertion indexes and direct evidence→subject dependency reference counts;
-- incrementally maintainable token/fragment/n-gram and predicate-specific postings in `SubjectProfileIndex`;
-- lazy IDF computation to avoid global vocabulary maintenance after cardinality changes;
-- `rag/maintenance.py`: affected-region discovery and incremental subject refresh;
-- `simulator/maintenance.py`: controlled mutation worlds;
-- `benchmark/maintenance_metrics.py`: incremental-vs-rebuild logical work and parity instrumentation;
-- `run_maintenance_experiment.py`;
-- `RESULTS_V0.6.md` and `maintenance_results.json`.
-
-The benchmark covers insert, evidence payload/alias replacement, predicate change, assertion→evidence rebind, shared-evidence replacement, assertion deletion, and evidence deletion at 100, 1,000, 10,000, and 50,000 entities.
-
-After every mutation, a fresh complete index is built as a correctness oracle. Every recorded v0.6 case achieved exact materialization equality and passed its semantic check.
-
-At 50,000 entities:
-
-- insert subject: 88 incremental operations versus 4,399,842 for rebuild;
-- replace one evidence payload: 36 versus 4,399,840;
-- change one predicate: 88 versus 4,399,840;
-- rebind one assertion to new evidence: 40 versus 4,399,842;
-- replace evidence shared by four subjects: 172 versus 4,400,038;
-- delete one assertion: 79 versus 4,399,950;
-- delete one evidence record: 81 versus 4,399,865.
-
-The fixed-local operations remain essentially flat as total entity cardinality grows, while the shared-evidence update remains proportional to its fixed fan-out of four. The result supports:
+For the synthetic topology control:
 
 \[
-MaintenanceCost(\Delta M) \propto Size(TrueAffectedSubgraph(\Delta M))
-\]
-
-rather than a universal O(1) write claim.
-
-Review hardening fixed hidden broad-posting materialization cost, deterministic same-sequence assertion ordering, and locality-index hydration for restored/pre-populated stores. The hardened CI run passed **38/38 unit tests** and reproduced the v0.4, v0.5, and v0.6 benchmark results. A requested second automated Codex review could not execute because the repository's code-review usage quota was exhausted; the available review findings were all addressed with regressions.
-
-## v0.7 — Dependency-cascade invalidation
-
-v0.7 extends the maintenance test from direct addressability updates to a multi-layer derived dependency path:
-
-\[
-Evidence/Assertion \rightarrow State/Profile \rightarrow Support \rightarrow Context
-\]
-
-New components:
-
-- `state/dependencies.py`: reverse dependency traversal, explicit derived lifecycle, exact dependency-graph parity, and retirement accounting;
-- `state/cascade.py`: integrated state/profile/support/context materialization with selective topological reconstruction;
-- `simulator/cascade.py`: integrated cardinality worlds and synthetic depth × fan-out topology controls;
-- `benchmark/cascade_metrics.py`;
-- `run_cascade_experiment.py`;
-- `RESULTS_V0.7.md` and `cascade_results.json`.
-
-The first v0.7 mechanism passed answer-level correctness and locality, but inspection found a lifecycle defect: deletion left unreachable derived nodes behind as dependency-metadata tombstones. The benchmark was kept fixed while the mechanism was hardened to count dependency-edge removal, retire unreachable nodes locally, and include the entire dependency graph in rebuild-oracle equality.
-
-A later v0.8 audit found a second issue in the v0.7 operational wrapper: affected-node discovery scanned the global invalid-node set before and after mutation even though traversal itself was local. The recorded v0.7 ledger reproduced through a scan-free replacement, and v0.8 promoted that replacement into the canonical `CascadeMaintainer` path.
-
-At 50,000 entities:
-
-- evidence payload replacement: 3 nodes invalidated/rebuilt, 60 incremental operations versus 5,149,752 for full reconstruction;
-- object-only assertion replacement: 3 nodes, 21 versus 5,149,752;
-- explicit correction: 4 nodes, 88 versus 5,149,786;
-- shared evidence with fan-out four: 12 nodes, 270 versus 5,149,994;
-- assertion deletion: 4 nodes rebuilt and then retired, 111 versus 5,149,891.
-
-All integrated rows exactly matched a clean reconstruction, including dependency graph lineage/lifecycle metadata, passed semantic checks, and contained no remaining invalid nodes.
-
-For fixed `depth=4`, `fanout=4`, synthetic invalidation work remained **50** while the total graph grew from 400 to 40,000 derived nodes. Across the controlled depth × fan-out sweep, the observed topology was exactly:
-
-\[
-AffectedNodes = F D
+AffectedNodes = FD
 \]
 
 \[
 InvalidationWork = 2 + 3FD
 \]
 
-under the benchmark's logical-work definition.
+under the benchmark's logical-work definition. Fixed `depth=4`, `fanout=4` invalidation work remained 50 while the total graph grew from 400 to 40,000 derived nodes.
 
-## v0.8 — Interrupted maintenance / crash recovery
+### v0.9 real process-crash recovery
 
-v0.8 adds a recovery coordinator and durable-intent state machine around canonical mutation and derived maintenance:
+The hardened matrix covers three mutation classes across eleven failpoints (**33 real SIGKILL cases**). In the strongest fixed-region locality case, recovery remained **28 logical operations** from 100 through 50,000 entities, while the full reconstruction control grew from 1,387 to 699,987.
 
-\[
-Intent
-\rightarrow CanonicalRedo
-\rightarrow Invalidate
-\rightarrow Rebuild/Retire
-\rightarrow CommitMaintenance
-\]
+### v0.10 durable multi-intent concurrency
 
-Key components:
+For the fixed three-intent crash/recovery workload:
 
-- `state/recovery.py`: durable-intent phases, stale-read blocking, partial-`REBUILDING` recovery, and idempotent canonical redo;
-- `simulator/recovery.py`: phase-boundary and cardinality recovery scenarios;
-- `benchmark/recovery_metrics.py`;
-- `run_recovery_experiment.py`;
-- `verify_recovery_results.py`;
-- `RESULTS_V0.8.md` and `recovery_results.json`.
+| Entities | Intents | Total logical recovery work | Full rebuild |
+|---:|---:|---:|---:|
+| 100 | 3 | **106** | 1,387 |
+| 1,000 | 3 | **106** | 13,987 |
+| 10,000 | 3 | **106** | 139,987 |
+| 50,000 | 3 | **106** | 699,987 |
 
-The first recovery mechanism was falsified by an inverse torn-boundary test: the journal phase marker could say `CANONICAL_APPLIED` while the canonical write itself was absent. The mechanism was revised to redo canonical mutation idempotently for both `PREPARED` and `CANONICAL_APPLIED` recovery.
+The experiment also verifies explicit same-key conflict/retry rather than silent lost update, real concurrent process admission, real `SIGKILL` recovery with active + queued work, and snapshot-consistent local read protection.
 
-Redo safety is tested for evidence upsert, assertion upsert, and assertion deletion. The hardened unit surface reached **60/60 passing** before the recovery ledger was regenerated.
+### v0.11 topology-dependent intent revalidation
 
-At N=100, redo-safe recovery work is:
+The v0.10 control deliberately reproduces this failure:
 
-| Operation | Prepared | Canonical applied | Invalidated | Rebuilding | Repaired |
-|---|---:|---:|---:|---:|---:|
-| Evidence payload | 67 | 66 | 53 | 36 | 3 |
-| Assertion object | 28 | 27 | 16 | 26 | 3 |
-| Delete assertion | 116 | 115 | 101 | 35 | 3 |
+1. queue an assertion subject move;
+2. queue an evidence update that captures the old subject as its read-impact key;
+3. execute the move first;
+4. promote the evidence update;
+5. the old admission-time key fails to protect the new subject while derived state is stale.
 
-The strongest locality case interrupts deletion with one partial derived write left `REBUILDING`. Recovery remains **35 logical operations** while total entity cardinality grows from 100 to 50,000; clean reconstruction grows from 9,977 to 5,149,651 logical operations.
+v0.11 recomputes topology-derived read keys during promotion, after all earlier intents and inside the transaction that installs the active maintenance journal.
 
-The surviving prototype-level invariant is:
+The corrected fixed two-intent workload produced:
 
-\[
-\boxed{
-DurableIntent + IdempotentCanonicalRedo + RecordedAffectedRegion
-\Rightarrow
-NoStaleRead + LocalIdempotentRecovery
-}
-\]
+| Entities | Total recovery work | Full rebuild |
+|---:|---:|---:|
+| 100 | **111** | 1,389 |
+| 1,000 | **111** | 13,989 |
+| 10,000 | **111** | 139,989 |
+| 50,000 | **111** | 699,989 |
 
-The final CI verifier requires exact row counts, unique keys, exact ledger key sets, equality of every recorded measurement field, and all safety/correctness booleans true. v0.8 remains a simulated durable-image result; v0.9 tests the corresponding storage/process claim.
-
-## v0.9 — Persistent WAL / real process-crash recovery
-
-v0.9 persists canonical records, derived nodes, dependency edges, and maintenance intent in SQLite and kills a separate worker process with actual `SIGKILL` at transaction boundaries. A fresh process reopens the database and drains recovery.
-
-The controlled storage configuration is SQLite WAL with `synchronous=FULL`. The canonical mutation and `CANONICAL_APPLIED` phase advance share one transaction, allowing the stronger storage substrate to refine v0.8's generic redo rule:
+The field-classification rule supported by the current operation set is:
 
 \[
-\boxed{
-Atomic(CanonicalMutation,PhaseAdvance)
-\Rightarrow
-CANONICAL\_APPLIED\ can\ be\ trusted
-}
+AdmissionStable(x) \Leftarrow VersionGuardedBySameWriteKey(x)
 \]
-
-The hardened matrix covers three mutation classes across eleven failpoints, for **33 real-SIGKILL cases**. Audit tightened the experiment to require a live open transaction at uncommitted failpoints, exact `-SIGKILL` exit status, mandatory WAL + `synchronous=FULL`, transaction coverage through finalization, and an `INDEXED BY` recursive affected-region walk whose query plan is checked in CI.
-
-All 33 hardened cases passed on GitHub Actions run `34019100562`. At N=100, recovery work is:
-
-| Operation | Prepared | Canonical uncommitted | Canonical committed | Invalidated | Partial committed | Repaired | Finalized |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Evidence payload | 38 | 38 | 36 | 29 | 32 | 2 | 0 |
-| Assertion object | 35 | 35 | 33 | 26 | 29 | 2 | 0 |
-| Delete assertion | 35 | 35 | 33 | 24 | 28 | 2 | 0 |
-
-Uncommitted invalidation, partial-rebuild, repair, and finalization transactions reopen exactly at their preceding committed phases. Recovery performs one canonical mutation only from durable `PREPARED`; every state at or after `CANONICAL_APPLIED` performs zero redundant canonical writes.
-
-The strongest locality case is assertion deletion after a committed partial rebuild. Recovery remains **28 logical operations** at 100, 1,000, 10,000, and 50,000 entities, while the full-rebuild control grows from 1,387 to 699,987.
-
-The compact machine-readable evidence is `process_recovery_results.json`; `verify_process_recovery_results.py` reruns the entire matrix/locality sweep and requires exact recorded metrics plus all safety/index booleans.
-
-The surviving v0.9 prototype-level invariant is:
 
 \[
-\boxed{
-TransactionalIntent
-+ AtomicCanonicalPhaseCommit
-+ IndexedDependencyTraversal
-+ LocalRepair
-\Rightarrow
-NoStaleRead + ExactProcessCrashRecovery
-}
+PromotionRevalidated(x) \Leftarrow DependsOnMutableCrossRecordTopology(x)
 \]
 
-Run the current planner, maintenance, cascade, and recovery milestones with:
+Accordingly, same-write-key `previous_json` snapshots are protected by optimistic version conflict, while topology-derived `read_keys` are recomputed at promotion.
+
+See `RESULTS_V0.11.md`, `topology_results.json`, and `verify_topology_results.py`.
+
+## Reproducing the hardened path
 
 ```bash
 python -m unittest discover -s tests -v
@@ -318,10 +192,51 @@ python run_maintenance_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
+python verify_multi_intent_results.py
+python verify_topology_results.py
 ```
 
-## Next falsification target — v0.10 multiple intents / concurrent writers
+CI runs this chain on pull requests and uploads the v0.9, v0.10, and v0.11 evidence ledgers as artifacts.
 
-The next unresolved maintenance-plane question is whether overlapping independent and conflicting mutations can preserve serializable canonical truth, exact dependency invalidation, bounded read blocking, deterministic recovery ordering, and affected-region-local recovery under contention and crashes.
+## Current architectural hypothesis
 
-The v0.10 experiment should begin with queued/serialized durable intents as the simplest control, then test same-key conflicts, independent subjects, evidence-update versus assertion-delete races, correction relations racing target replacement, crash recovery with multiple outstanding intents, writer lock contention, and whether read admission can safely narrow from a global maintenance block to affected subgraphs.
+The project currently favors:
+
+```text
+Canonical evidence
+  -> revisable assertions
+  -> selectively materialized state / derived views
+
+Question
+  -> ambiguity-aware resolution
+  -> indexed candidate generation
+  -> hard constraints only when justified
+  -> coverage-controlled retrieval
+  -> bounded context compilation
+
+Canonical mutation
+  -> durable ordered intent
+  -> write-key conflict validation
+  -> promotion-time topology-impact revalidation
+  -> local dependency invalidation
+  -> selective reconstruction / retirement
+  -> crash-safe completion
+```
+
+The important distinction remains:
+
+> Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
+
+## Next falsification target — topology growth / missing derived-node creation
+
+v0.11 repairs stale impact metadata when existing topology changes. It does not yet establish that canonical topology can grow into regions for which no derived materialization exists.
+
+The next high-value counterexample is therefore:
+
+\[
+\boxed{
+CanonicalTopologyGrowth \Rightarrow DerivedNodeCreation\ ?
+}
+\]
+
+A move or insertion into a genuinely new subject/predicate may produce seed node IDs that do not yet exist in `derived_nodes`. The next experiment should determine whether the current recovery path silently leaves canonical truth without a corresponding state/profile/support/context materialization, and if so whether missing nodes can be synthesized locally without a full reconstruction.
