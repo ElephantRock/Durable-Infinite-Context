@@ -20,6 +20,7 @@ jobs:
       - run: python run_planner_experiment.py
       - run: python run_scalable_planner_experiment.py
       - run: python run_maintenance_experiment.py
+      - run: python run_compositional_profile_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -28,6 +29,7 @@ jobs:
       - run: python verify_growth_results.py
       - run: python verify_predicate_schema_results.py
       - run: python verify_subject_fanout_results.py
+      - run: python verify_compositional_profile_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -57,4 +59,9 @@ jobs:
         with:
           name: v0.14-subject-fanout-results
           path: subject_fanout_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.15-compositional-profile-results
+          path: compositional_profile_results.json
           if-no-files-found: error

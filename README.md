@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.14
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.15
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -37,7 +37,9 @@ The prototype now contains:
 - promotion-time revalidation of topology-dependent impact metadata;
 - local creation of missing required materializations;
 - subject-wide profile semantics when profile identity is subject-only;
-- transactional `(subject,predicate) -> current assertion` heads so current profile reconstruction does not rescan historical versions;
+- transactional `(subject,predicate) -> current assertion` heads so current reconstruction does not rescan historical versions;
+- compositional subject profiles whose persisted profile is a predicate manifest and whose evidence-bearing state lives in predicate facets;
+- one-snapshot full and selective profile assembly with facet-local stale-read protection;
 - machine-readable evidence ledgers with executable replay verifiers;
 - a pluggable `AgenticRAGAdapter` seam for the still-required strong baseline comparison.
 
@@ -58,6 +60,7 @@ Evidence
 + MaterializationCompleteness
 + SemanticIdentityConsistency
 + CurrentHeadMaterialization
++ CompositionalProfileAssembly
 }
 \]
 
@@ -78,6 +81,8 @@ Current evidence does **not** establish:
 - cold/archive recovery;
 - arbitrary ontology/schema migration;
 - constant work as the true live semantic footprint of one subject grows;
+- physical `O(K)` selective-profile bytes/time independent of total live predicate count `P`;
+- `O(K)` predicate-topology mutation cost independent of `P`;
 - a strong agentic-RAG superiority result.
 
 Real extraction and a genuine strong agentic retrieval baseline remain mandatory before broad superiority claims.
@@ -99,7 +104,8 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.11 | Can admission-time impact metadata become stale after earlier topology changes? | Yes. Promotion-time topology revalidation closes the demonstrated stale-read leak. |
 | v0.12 | Can canonical growth require derived outputs that do not yet exist? | Yes. Explicit missing-output obligations restore exact materialization completeness. |
 | v0.13 | Can subject-only profiles remain correct when predicates change/coexist? | v0.12 loses the profile after `deadline -> launch_date`; subject-wide profile semantics restore exact parity. |
-| v0.14 | Can current subject profiles avoid rescanning deep predicate history? | Yes in the controlled benchmark: a transactional current-head index removes H-dependence while preserving legitimate P-dependence and global-N locality. |
+| v0.14 | Can current subject profiles avoid rescanning deep predicate history? | A transactional current-head index removes H-dependence while preserving legitimate P-dependence and global-N locality. |
+| v0.15 | Can evidence/value maintenance and selective profile assembly scale with changed/requested subset `K` instead of all live predicates `P`? | In logical row/facet operations, yes: maintenance is proportional to `K`, selective facet reads are `K+2`, and full assembly remains proportional to `P`, with exact v0.14 logical semantics. The experiment also exposes an `O(P)` serialized manifest that prevents a stronger physical `O(K)` claim. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
@@ -177,7 +183,7 @@ True live predicate fan-out remains visible:
 | 16 | 159 |
 | 32 | 287 |
 
-This is expected because the profile output itself contains `P` live predicates.
+This is expected because the v0.14 persisted profile itself contains `P` live predicate contributions.
 
 With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant:
 
@@ -188,16 +194,62 @@ With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant:
 | 10,000 | **95** | 140,259 |
 | 50,000 | **95** | 700,259 |
 
-The surviving locality statement is therefore:
+The v0.14 locality statement was therefore:
+
+\[
+RecoveryCost(subject) \approx f(TrueLiveSemanticFootprint(subject)),
+\text{ not } f(LifetimeHistory,GlobalMemory)
+\]
+
+### v0.15 compositional profile facets
+
+Let:
+
+\[
+K=\text{changed/requested profile facets}, \qquad K\le P
+\]
+
+v0.15 persists a lightweight subject predicate manifest and reuses predicate-specific support materializations as evidence-bearing facets. The first CI run failed exact cross-version equivalence because the assembled Python representation used tuples where v0.14 persisted JSON used lists; that interface mismatch was corrected and permanently regression-tested rather than normalizing away the failure.
+
+At fixed `K=1,H=8,N=128`:
+
+| P | v0.14 maintenance | v0.15 maintenance | Partial logical assembly | Full logical assembly | Manifest bytes |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 39 | **27** | **3** | 3 | 66 |
+| 2 | 47 | **27** | **3** | 4 | 78 |
+| 4 | 63 | **27** | **3** | 6 | 102 |
+| 8 | 95 | **27** | **3** | 10 | 150 |
+| 16 | 159 | **27** | **3** | 18 | 246 |
+| 32 | 287 | **27** | **3** | 34 | 438 |
+| 64 | 543 | **27** | **3** | 66 | 822 |
+
+At fixed `P=32`:
+
+| K | v0.14 maintenance | v0.15 maintenance | Partial logical assembly | Full logical assembly |
+|---:|---:|---:|---:|---:|
+| 1 | 287 | **27** | 3 | 34 |
+| 2 | 574 | **54** | 4 | 34 |
+| 4 | 1,148 | **108** | 6 | 34 |
+| 8 | 2,296 | **216** | 10 | 34 |
+| 16 | 4,592 | **432** | 18 | 34 |
+
+For fixed `P=16,K=1`, maintenance remains **27** and selective logical assembly remains **3** across `H={1,8,64}` and unrelated `N={100,1000,10000,50000}`. Full assembly remains `P+2=18` logical reads.
+
+The evidence supports:
 
 \[
 \boxed{
-RecoveryCost(subject) \approx f(TrueLiveSemanticFootprint(subject)),
-\text{ not } f(LifetimeHistory,GlobalMemory)
+Maintenance_{evidence/value}=O(K),\qquad
+SelectiveFacetReads=O(K),\qquad
+FullFacetReads=O(P)
 }
 \]
 
-See `RESULTS_V0.14.md`, `subject_fanout_results.json`, and `verify_subject_fanout_results.py`.
+under the experiment's logical-operation accounting and with exact v0.14 full-profile semantics.
+
+The same evidence exposes the next limitation: the manifest grows from 66 to 822 serialized bytes as `P` grows from 1 to 64, and every selective read currently loads that full row. Therefore v0.15 does **not** establish physical `O(K)` bytes, page I/O, or CPU time independent of `P`.
+
+See `RESULTS_V0.15.md`, `compositional_profile_results.json`, and `verify_compositional_profile_results.py`.
 
 ## Reproducing the hardened path
 
@@ -206,6 +258,7 @@ python -m unittest discover -s tests -v
 python run_planner_experiment.py
 python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
+python run_compositional_profile_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -214,6 +267,7 @@ python verify_topology_results.py
 python verify_growth_results.py
 python verify_predicate_schema_results.py
 python verify_subject_fanout_results.py
+python verify_compositional_profile_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -224,6 +278,8 @@ CI runs this chain on pull requests and uploads the hardened evidence ledgers as
 Canonical evidence
   -> revisable assertion history
   -> transactional current heads where repeated current reconstruction earns them
+  -> predicate-specific evidence-bearing facets
+  -> subject profile manifest / compositional logical profile
   -> selectively materialized state / derived views
 
 Question
@@ -231,6 +287,8 @@ Question
   -> indexed candidate generation
   -> justified hard constraints
   -> coverage-controlled retrieval
+  -> requested semantic subset
+  -> one-snapshot facet assembly
   -> bounded context compilation
 
 Canonical mutation
@@ -242,11 +300,13 @@ Canonical mutation
   -> create required absent materializations
   -> reconstruct according to stable semantic identity
   -> update/reuse current-head materializations
+  -> repair only affected evidence-bearing facets when topology is unchanged
+  -> update profile topology when predicate presence changes
   -> selective retirement
   -> crash-safe completion
 ```
 
-Three distinctions are now central:
+Four distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -254,25 +314,22 @@ Three distinctions are now central:
 
 > Maintenance locality should be judged against the true semantic footprint required by the output, not against total database size or lifetime history.
 
-## Next falsification target — compositional profile facets
+> Counting one row as one operation is not enough to prove locality when that row's serialized size grows with semantic fan-out.
 
-v0.14 removes unnecessary dependence on historical depth `H`, but a subject-wide profile still rebuilds work proportional to its entire live predicate footprint `P`.
+## Next falsification target — normalized predicate membership
 
-The next question is whether every mutation really requires rebuilding all `P` profile facets, or whether the profile should become a compositional view over smaller predicate/facet materializations.
+v0.15 removes subject-wide evidence reconstruction from the common evidence/value maintenance path, but its predicate manifest is still a serialized `O(P)` object. A `K=1` selective read currently deserializes all `P` predicate names, and predicate-presence changes can require rewriting that manifest.
 
-Let:
-
-\[
-K=\text{changed/requested profile facets}, \qquad K \ll P
-\]
-
-The next target is:
+The next question is therefore:
 
 \[
 \boxed{
-Can profile maintenance and task reconstruction scale with K rather than P
-without losing subject-wide semantic coherence?
+Can selective physical work and predicate-topology delta work scale with K
+without touching an O(P) manifest,
+while full enumeration remains honestly O(P)?
 }
 \]
 
-That experiment should compare a monolithic subject profile against compositional facet materialization while independently varying `P`, changed subset `K`, history depth `H`, and unrelated global memory `N`.
+A candidate v0.16 mechanism is normalized, indexed predicate membership such as `(subject,predicate)` rows. Selective reads would validate requested predicates by `K` indexed probes; topology mutations would update only changed membership rows; full profile enumeration would still stream all `P` memberships/facets.
+
+The experiment must add byte-/row-/page-sensitive instrumentation so an arbitrarily large value cannot hide behind a single logical row read. It must retain exact v0.15/v0.14 logical semantics, history/global locality, topology lifecycle correctness, and the existing one-snapshot stale-read protection.
