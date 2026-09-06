@@ -7,6 +7,7 @@ from simulator.predicate_schema import (
     run_predicate_locality_case,
     run_v012_predicate_control,
     run_v013_predicate_addition,
+    run_v013_predicate_removal,
     run_v013_predicate_replacement,
 )
 
@@ -52,6 +53,17 @@ def run() -> dict:
         },
     )
 
+    removal = run_v013_predicate_removal(entity_count=64, index=40)
+    print(
+        "PREDICATE_V013_REMOVAL",
+        {
+            "profile_predicates": removal["profile_predicates"],
+            "subject_derived_count": removal["subject_derived_count"],
+            "materialization_equal": removal["materialization_equal"],
+            "queue_final": removal["queue_final"],
+        },
+    )
+
     locality_rows = []
     for entity_count in (100, 1_000, 10_000, 50_000):
         row = run_predicate_locality_case(entity_count)
@@ -87,6 +99,8 @@ def run() -> dict:
         raise AssertionError("v0.13 replacement did not converge to clean reconstruction")
     if not replacement["profile_lookup_uses_index"]:
         raise AssertionError("subject-wide profile reconstruction did not use the subject/predicate index")
+    if replacement["recovery_trace"]["logical_work"] != replacement["recovery_work"]:
+        raise AssertionError("v0.13 recovery trace accounting is internally inconsistent")
 
     if addition["profile_predicates"] != ["deadline", "launch_date"]:
         raise AssertionError("v0.13 profile did not aggregate simultaneously live predicates")
@@ -98,6 +112,19 @@ def run() -> dict:
         raise AssertionError("v0.13 ordered evidence/assertion addition did not drain cleanly")
     if not addition["materialization_equal"] or not addition["all_derived_fresh"]:
         raise AssertionError("v0.13 addition did not converge to clean reconstruction")
+
+    if removal["deadline_assertion_present"] or not removal["added_assertion_present"]:
+        raise AssertionError("v0.13 predicate removal did not leave the intended canonical predicate set")
+    if removal["deadline_context_present"] or not removal["new_context_present"]:
+        raise AssertionError("v0.13 predicate removal context lifecycle is incorrect")
+    if removal["profile_predicates"] != ["launch_date"]:
+        raise AssertionError("v0.13 predicate removal retired or polluted the subject profile")
+    if removal["subject_derived_count"] != 4:
+        raise AssertionError("v0.13 predicate removal did not converge to one remaining predicate triplet")
+    if removal["queue_final"]["done"] != 3 or removal["queue_final"]["conflict"] != 0:
+        raise AssertionError("v0.13 predicate removal queue did not drain cleanly")
+    if not removal["materialization_equal"] or not removal["all_derived_fresh"]:
+        raise AssertionError("v0.13 predicate removal did not converge to clean reconstruction")
 
     work = {row["recovery_work"] for row in locality_rows}
     if len(work) != 1:
@@ -114,6 +141,7 @@ def run() -> dict:
             and row["materialization_equal"]
             and row["all_derived_fresh"]
             and row["profile_lookup_uses_index"]
+            and row["recovery_trace"]["logical_work"] == row["recovery_work"]
         ):
             raise AssertionError(f"v0.13 predicate safety failure at N={row['entity_count']}")
         if row["recovery_work"] >= row["full_rebuild_work"]:
@@ -126,6 +154,7 @@ def run() -> dict:
         "control": control,
         "replacement": replacement,
         "addition": addition,
+        "removal": removal,
         "locality_cardinalities": [100, 1_000, 10_000, 50_000],
         "locality_rows": locality_rows,
         "invariant": (
@@ -137,8 +166,9 @@ def run() -> dict:
             "state/support/context remain predicate-specific, and topology growth still creates only missing predicate outputs"
         ),
         "scope": (
-            "single SQLite database; controlled deadline->launch_date replacement plus one two-predicate addition; "
-            "subject-local indexed reconstruction; synthetic oracle assertions; no arbitrary schema registry, ontology migration, or distributed claim"
+            "single SQLite database; controlled deadline->launch_date replacement, two-predicate addition, and one-predicate removal; "
+            "subject-local indexed reconstruction; cost claim is independent of unrelated entity cardinality, not subject-local history or predicate fan-out; "
+            "synthetic oracle assertions; no arbitrary schema registry, ontology migration, or distributed claim"
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2))
