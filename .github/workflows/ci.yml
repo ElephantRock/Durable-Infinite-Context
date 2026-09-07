@@ -39,6 +39,7 @@ jobs:
       - run: python verify_page_locality_results.py
       - run: python verify_hash_resize_results.py
       - run: python verify_incremental_hash_results.py
+      - run: python verify_bounded_placement_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
