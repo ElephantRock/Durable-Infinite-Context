@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.17
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.18
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -86,6 +86,7 @@ Current evidence does **not** establish:
 - constant work as the true live semantic footprint of one subject grows;
 - direct operating-system/storage-device page-read locality independent of global memory;
 - constant B-tree traversal depth as global indexes grow;
+- a crash-safe bounded-migration hash/direct-address replacement for the current B-tree;
 - constant work for arbitrarily large individual facet values;
 - a strong agentic-RAG superiority result.
 
@@ -112,6 +113,7 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.15 | Can evidence/value maintenance and selective profile assembly scale with changed/requested subset `K` instead of all live predicates `P`? | In logical row/facet operations, yes: maintenance is proportional to `K`, selective facet reads are proportional to `K`, and full assembly remains proportional to `P`. The experiment exposed an `O(P)` serialized manifest. |
 | v0.16 | Can selective returned work and predicate-topology deltas avoid touching/rebuilding that `O(P)` manifest? | Yes in the measured SQL-returned/serialized path: a 40-byte descriptor plus normalized indexed membership keeps `K=1` returned bytes fixed across `P=1..64`, and topology add/delete work is P-invariant. But `dbstat` shows the global membership B-tree height grows with N. |
 | v0.17 | Can fixed B-tree partitioning make cold point-lookup index-page traversal independent of global `N`? | No. 64-way hash partitioning delays page-height transitions but its maximum shard height still grows at sufficiently large N. Fixed finite B-tree sharding remains `Theta(log_B N)` in page levels. |
+| v0.18 | Is conventional bounded-load hashing sufficient to get both expected constant lookup pages and global-N-independent mutation work? | No. Successful lookup stayed at p95=1 page and max=2 in the tested model, but stop-the-world capacity doubling rehashed every prior live row, creating `Theta(N)` mutation spikes. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
@@ -312,6 +314,38 @@ This is a negative result: **fixed B-tree sharding is not being merged as an asy
 
 See `RESULTS_V0.17.md`, `page_locality_results.json`, and `verify_page_locality_results.py`.
 
+### v0.18 bounded-load hash resize envelope
+
+v0.18 tested a deterministic open-addressed hash index at maximum load `0.50` with 64 logical slots per page. The lookup side is excellent in the controlled model:
+
+| Membership rows `N` | Lookup page p50 | Lookup page p95 | Lookup page max |
+|---:|---:|---:|---:|
+| 1,000 | 1 | 1 | 2 |
+| 4,000 | 1 | 1 | 2 |
+| 16,000 | 1 | 1 | 2 |
+| 64,000 | 1 | 1 | 2 |
+| 256,000 | 1 | 1 | 2 |
+
+But conventional capacity doubling moves the non-locality to mutation time:
+
+| Membership rows `N` | Largest single resize migration |
+|---:|---:|
+| 1,000 | 512 rows |
+| 4,000 | 2,048 rows |
+| 16,000 | 8,192 rows |
+| 64,000 | 32,768 rows |
+| 256,000 | 131,072 rows |
+
+Each resize rehashes every row that was live before the triggering insertion, so:
+
+\[
+\boxed{ResizeSpike(N)=\Theta(N)}
+\]
+
+The cumulative rehash work through 256k rows is **262,080 row migrations**, beyond the ordinary insertions. Therefore a stop-the-world resized hash table does **not** earn replacement of the simpler production B-tree: expected constant lookup alone is insufficient when growth can charge a global migration spike to one logical mutation.
+
+See `RESULTS_V0.18.md`, `hash_resize_results.json`, and `verify_hash_resize_results.py`.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -322,6 +356,7 @@ python run_maintenance_experiment.py
 python run_compositional_profile_experiment.py
 python run_normalized_membership_experiment.py
 python run_page_locality_experiment.py
+python run_hash_resize_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -333,6 +368,7 @@ python verify_subject_fanout_results.py
 python verify_compositional_profile_results.py
 python verify_normalized_membership_results.py
 python verify_page_locality_results.py
+python verify_hash_resize_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -374,7 +410,7 @@ Canonical mutation
   -> crash-safe completion
 ```
 
-Six distinctions are now central:
+Seven distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -388,17 +424,20 @@ Six distinctions are now central:
 
 > Fixed partitioning of a comparison index changes constants and thresholds, not the `Theta(log_B N)` lookup class.
 
-## Next falsification target — logarithmic addressability envelope
+> Expected constant lookup does not establish system locality if resize can charge `Theta(N)` migration work to one logical mutation.
 
-v0.17 rejects a stronger requirement that the current comparison-index lookup must somehow remain constant-page as global memory grows. That does **not** show logarithmic addressability is operationally problematic; B-tree depth grows very slowly at realistic page fan-out.
+## Next falsification target — incremental hash migration
+
+v0.18 shows that a conventional resized hash table trades shallow expected lookup for periodic global migration spikes. That is not enough to replace the current B-tree.
 
 The next question is therefore:
 
 \[
 \boxed{
-Is O(\log_B N) indexed addressability practically bounded enough for durable context reconstruction,
-or does a growing direct-address/hash structure earn its additional recovery and resize complexity?
+Can hash growth be made incremental so lookup remains expected O(1)
+and migration work per logical mutation remains bounded,
+without losing crash/read safety or creating unacceptable space amplification?
 }
 \]
 
-A v0.18 experiment should compare the existing normalized B-tree path against a bounded-occupancy hash/direct-address candidate using the same exact semantics. It must account for lookup-page depth, resize/split work, write amplification, crash recovery, and stale-read protection. A lower lookup asymptotic does not earn its complexity unless it survives those costs.
+A v0.19 candidate should test linear or extendible hashing, or a dual-generation rehash with a strict migration budget per logical mutation. The fixed experiment must measure lookup amplification during migration, maximum per-mutation migration work, temporary space amplification, completion guarantees, and then—if the algorithmic mechanism survives—subject it to the repository's crash-recovery and stale-read invariants before any production replacement is considered.
