@@ -27,6 +27,7 @@ jobs:
       - run: python run_incremental_hash_experiment.py
       - run: python run_bounded_placement_experiment.py
       - run: python run_bounded_escape_experiment.py
+      - run: python run_rare_overflow_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -106,4 +107,9 @@ jobs:
         with:
           name: v0.21-bounded-escape-results
           path: bounded_escape_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.22-rare-overflow-results
+          path: rare_overflow_results.json
           if-no-files-found: error
