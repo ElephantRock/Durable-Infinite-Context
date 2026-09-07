@@ -75,6 +75,7 @@ class RareOverflowHybridIndex:
         self.conn.commit()
         self.page_size = int(self.conn.execute("PRAGMA page_size").fetchone()[0])
         self.size = 0
+        self._overflow_rows = 0
 
     def close(self) -> None:
         self.conn.close()
@@ -85,7 +86,7 @@ class RareOverflowHybridIndex:
 
     @property
     def overflow_rows(self) -> int:
-        return int(self.conn.execute("SELECT COUNT(*) FROM overflow").fetchone()[0])
+        return self._overflow_rows
 
     @property
     def overflow_height(self) -> int:
@@ -111,18 +112,19 @@ class RareOverflowHybridIndex:
                 success=True,
                 path="primary",
                 primary_mutation_slot_work=primary_trace.mutation_slot_work,
-                overflow_rows_after=self.overflow_rows,
+                overflow_rows_after=self._overflow_rows,
             )
 
         self.conn.execute("INSERT INTO overflow(key) VALUES (?)", (key,))
         self.conn.commit()
+        self._overflow_rows += 1
         self.size += 1
         return HybridInsertTrace(
             key=key,
             success=True,
             path="overflow",
             primary_mutation_slot_work=primary_trace.mutation_slot_work,
-            overflow_rows_after=self.overflow_rows,
+            overflow_rows_after=self._overflow_rows,
         )
 
     def lookup(self, key: str) -> HybridLookupTrace:
@@ -243,9 +245,6 @@ def run_rare_overflow_envelope(
         finally:
             index.close()
 
-    # Discriminating fixture: one primary domain is deliberately saturated in a
-    # concentrated collision pair. The first 16 keys occupy its two buckets+stash;
-    # every later key goes to the explicit B-tree overflow.
     stress = RareOverflowHybridIndex(
         1024,
         bucket_size=bucket_size,
@@ -293,6 +292,15 @@ def run_rare_overflow_envelope(
             if missing.found or missing.path != "miss" or not missing.overflow_checked:
                 raise AssertionError("missing key did not exercise explicit overflow miss path")
 
+            actual_overflow_keys = [
+                str(row[0])
+                for row in stress.conn.execute("SELECT key FROM overflow ORDER BY key").fetchall()
+            ]
+            expected_overflow_keys = [
+                f"collision_overflow_{i:09d}" for i in range(target_overflow)
+            ]
+            primary_intact = all(stress.lookup(key).found for key in admitted_primary)
+
             stress_rows.append(
                 {
                     "overflow_rows": target_overflow,
@@ -310,19 +318,14 @@ def run_rare_overflow_envelope(
                     "overflow_btree_total_pages": stats["total_pages"],
                     "overflow_btree_internal_pages": stats["internal_pages"],
                     "overflow_btree_leaf_pages": stats["leaf_pages"],
-                    "all_inserted_found": all(
-                        stress.lookup(key).found
-                        for key in admitted_primary
-                        + [f"collision_overflow_{i:09d}" for i in range(target_overflow)]
-                    ),
+                    "all_inserted_found": primary_intact
+                    and actual_overflow_keys == expected_overflow_keys,
                 }
             )
             previous_overflow = target_overflow
     finally:
         stress.close()
 
-    # v0.21 finite-escalation control at D=8: same concentrated width as its
-    # hardened experiment, demonstrating the finite-admission alternative.
     control = BoundedDomainEscalationIndex(
         1024,
         domain_count=8,
