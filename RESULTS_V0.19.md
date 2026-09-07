@@ -40,7 +40,7 @@ Contained JSON payload SHA-256:
 
 `f04bd9c62c85ffb241ed6cd7e9642ddac3c4dcb07f4e1f6725de3615341eb8e8`
 
-The committed ledger is subsequently replayed exactly by `verify_incremental_hash_results.py`; final merge remains gated on the exact documentation/verifier head.
+The committed ledger is replayed exactly by `verify_incremental_hash_results.py`. Final merge is gated on exact-head CI after verifier, CI, and README hardening.
 
 ## Fixed growth sweep
 
