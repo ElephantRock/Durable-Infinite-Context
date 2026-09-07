@@ -83,6 +83,10 @@ def run() -> dict:
     if candidate["global_max_rows_copied_per_insert"] >= control_largest[-1]:
         raise AssertionError("incremental migration failed to reduce the single-mutation spike")
 
+    mutation_slot_maxima = [
+        row["interval_max_mutation_slot_work"] for row in candidate["rows"]
+    ]
+
     for row in candidate["rows"]:
         print("INCREMENTAL_HASH_N", row)
     for snapshot in candidate["migration_snapshots"]:
@@ -100,6 +104,7 @@ def run() -> dict:
         },
         "stop_the_world_control": control,
         "incremental_candidate": candidate,
+        "observed_mutation_slot_work_maxima": mutation_slot_maxima,
         "hypothesis_under_test": (
             "a two-generation open-addressed hash index with a strict fixed source-slot "
             "migration budget can remove the stop-the-world Theta(N) resize charge from "
@@ -113,16 +118,23 @@ def run() -> dict:
             "must stay at or below 1.5x the target generation"
         ),
         "result": (
-            "survives the tested algorithmic envelope if all fixed-budget, completion, "
-            "two-generation lookup, and capacity-amplification checks pass; this distributes "
-            "rather than removes total rehash work and does not establish worst-case constant "
-            "destination linear-probe work or persistent crash safety"
+            "the migration-scheduling hypothesis survives the tested algorithmic envelope: "
+            "source scanning and copied rows are bounded per insertion, migration completes, "
+            "and lookup generation fan-out is at most two. Total rehash work is distributed "
+            "rather than removed. The stronger claim that total mutation work is globally "
+            "bounded does not survive this evidence because destination linear probing is "
+            "unbounded and the observed interval mutation-slot maxima rise with the sweep."
+        ),
+        "observed_caveat": (
+            "fixed source migration budget does not bound destination placement probes: "
+            f"interval maximum mutation slot work is {mutation_slot_maxima}"
         ),
         "revision": (
-            "incremental migration is a stronger candidate than stop-the-world rehash for "
-            "mutation locality, but it is not yet earned as the production address index. "
-            "The next falsification target is persistence: crash at migration boundaries and "
-            "prove restart/read correctness without stale, lost, or duplicate membership."
+            "incremental migration is a stronger resize scheduler than stop-the-world rehash, "
+            "but it is not yet earned as the production address index. Before persistence, "
+            "test a placement mechanism with a defensible bounded collision/relocation "
+            "envelope under growing and adversarial collision fixtures; crash-safe migration "
+            "remains a later mandatory gate."
         ),
         "measurement_scope": candidate["measurement_scope"],
     }
