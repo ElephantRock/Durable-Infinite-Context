@@ -25,6 +25,7 @@ jobs:
       - run: python run_page_locality_experiment.py
       - run: python run_hash_resize_experiment.py
       - run: python run_incremental_hash_experiment.py
+      - run: python run_bounded_placement_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -92,4 +93,9 @@ jobs:
         with:
           name: v0.19-incremental-hash-results
           path: incremental_hash_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.20-bounded-placement-results
+          path: bounded_placement_results.json
           if-no-files-found: error
