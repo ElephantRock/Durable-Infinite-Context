@@ -33,6 +33,7 @@ jobs:
       - run: python verify_subject_fanout_results.py
       - run: python verify_compositional_profile_results.py
       - run: python verify_normalized_membership_results.py
+      - run: python verify_page_locality_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
