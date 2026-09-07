@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.15
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.16
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -38,8 +38,10 @@ The prototype now contains:
 - local creation of missing required materializations;
 - subject-wide profile semantics when profile identity is subject-only;
 - transactional `(subject,predicate) -> current assertion` heads so current reconstruction does not rescan historical versions;
-- compositional subject profiles whose persisted profile is a predicate manifest and whose evidence-bearing state lives in predicate facets;
-- one-snapshot full and selective profile assembly with facet-local stale-read protection;
+- compositional subject profiles whose evidence-bearing state lives in predicate facets;
+- normalized indexed `(subject,predicate)` membership instead of a serialized all-predicate profile manifest;
+- constant-size subject profile descriptors plus one-snapshot full/selective assembly;
+- facet-local stale-read protection during active maintenance;
 - machine-readable evidence ledgers with executable replay verifiers;
 - a pluggable `AgenticRAGAdapter` seam for the still-required strong baseline comparison.
 
@@ -61,6 +63,7 @@ Evidence
 + SemanticIdentityConsistency
 + CurrentHeadMaterialization
 + CompositionalProfileAssembly
++ NormalizedPredicateMembership
 }
 \]
 
@@ -81,8 +84,9 @@ Current evidence does **not** establish:
 - cold/archive recovery;
 - arbitrary ontology/schema migration;
 - constant work as the true live semantic footprint of one subject grows;
-- physical `O(K)` selective-profile bytes/time independent of total live predicate count `P`;
-- `O(K)` predicate-topology mutation cost independent of `P`;
+- direct operating-system/storage-device page-read locality independent of global memory;
+- constant B-tree traversal depth as global indexes grow;
+- constant work for arbitrarily large individual facet values;
 - a strong agentic-RAG superiority result.
 
 Real extraction and a genuine strong agentic retrieval baseline remain mandatory before broad superiority claims.
@@ -104,8 +108,9 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.11 | Can admission-time impact metadata become stale after earlier topology changes? | Yes. Promotion-time topology revalidation closes the demonstrated stale-read leak. |
 | v0.12 | Can canonical growth require derived outputs that do not yet exist? | Yes. Explicit missing-output obligations restore exact materialization completeness. |
 | v0.13 | Can subject-only profiles remain correct when predicates change/coexist? | v0.12 loses the profile after `deadline -> launch_date`; subject-wide profile semantics restore exact parity. |
-| v0.14 | Can current subject profiles avoid rescanning deep predicate history? | A transactional current-head index removes H-dependence while preserving legitimate P-dependence and global-N locality. |
-| v0.15 | Can evidence/value maintenance and selective profile assembly scale with changed/requested subset `K` instead of all live predicates `P`? | In logical row/facet operations, yes: maintenance is proportional to `K`, selective facet reads are `K+2`, and full assembly remains proportional to `P`, with exact v0.14 logical semantics. The experiment also exposes an `O(P)` serialized manifest that prevents a stronger physical `O(K)` claim. |
+| v0.14 | Can current subject profiles avoid rescanning deep predicate history? | A transactional current-head index removes H-dependence while preserving legitimate P-dependence and global-N logical locality. |
+| v0.15 | Can evidence/value maintenance and selective profile assembly scale with changed/requested subset `K` instead of all live predicates `P`? | In logical row/facet operations, yes: maintenance is proportional to `K`, selective facet reads are proportional to `K`, and full assembly remains proportional to `P`. The experiment exposed an `O(P)` serialized manifest. |
+| v0.16 | Can selective returned work and predicate-topology deltas avoid touching/rebuilding that `O(P)` manifest? | Yes in the measured SQL-returned/serialized path: a 40-byte descriptor plus normalized indexed membership keeps `K=1` returned bytes fixed across `P=1..64`, and topology add/delete work is P-invariant. But `dbstat` shows the global membership B-tree height grows with N, so constant physical page I/O remains unproven. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
@@ -183,9 +188,7 @@ True live predicate fan-out remains visible:
 | 16 | 159 |
 | 32 | 287 |
 
-This is expected because the v0.14 persisted profile itself contains `P` live predicate contributions.
-
-With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant:
+With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant to the logical recovery count:
 
 | Entities | Recovery work | Full rebuild |
 |---:|---:|---:|
@@ -193,13 +196,6 @@ With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant:
 | 1,000 | **95** | 14,259 |
 | 10,000 | **95** | 140,259 |
 | 50,000 | **95** | 700,259 |
-
-The v0.14 locality statement was therefore:
-
-\[
-RecoveryCost(subject) \approx f(TrueLiveSemanticFootprint(subject)),
-\text{ not } f(LifetimeHistory,GlobalMemory)
-\]
 
 ### v0.15 compositional profile facets
 
@@ -209,7 +205,7 @@ Let:
 K=\text{changed/requested profile facets}, \qquad K\le P
 \]
 
-v0.15 persists a lightweight subject predicate manifest and reuses predicate-specific support materializations as evidence-bearing facets. The first CI run failed exact cross-version equivalence because the assembled Python representation used tuples where v0.14 persisted JSON used lists; that interface mismatch was corrected and permanently regression-tested rather than normalizing away the failure.
+v0.15 persists a subject predicate manifest and reuses predicate-specific support materializations as evidence-bearing facets. The first CI run failed exact cross-version equivalence because the assembled Python representation used tuples where v0.14 persisted JSON used lists; that interface mismatch was corrected and regression-tested rather than normalized away.
 
 At fixed `K=1,H=8,N=128`:
 
@@ -233,23 +229,59 @@ At fixed `P=32`:
 | 8 | 2,296 | **216** | 10 | 34 |
 | 16 | 4,592 | **432** | 18 | 34 |
 
-For fixed `P=16,K=1`, maintenance remains **27** and selective logical assembly remains **3** across `H={1,8,64}` and unrelated `N={100,1000,10000,50000}`. Full assembly remains `P+2=18` logical reads.
+The evidence supports logical subset locality, but the manifest grows from 66 to 822 serialized bytes as `P` grows from 1 to 64. That failure motivates v0.16.
 
-The evidence supports:
+See `RESULTS_V0.15.md`, `compositional_profile_results.json`, and `verify_compositional_profile_results.py`.
+
+### v0.16 normalized predicate membership
+
+v0.16 replaces the serialized predicate manifest with a **40-byte subject descriptor** and normalized indexed membership rows.
+
+At fixed `K=1,H=8,N=128`:
+
+| P | v0.15 manifest bytes | v0.16 descriptor bytes | selective SQL payload bytes | selective VM steps | full SQL payload bytes |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 66 | **40** | **270** | **60** | 270 |
+| 2 | 78 | **40** | **270** | **60** | 474 |
+| 4 | 102 | **40** | **270** | **60** | 882 |
+| 8 | 150 | **40** | **270** | **60** | 1,698 |
+| 16 | 246 | **40** | **270** | **60** | 3,330 |
+| 32 | 438 | **40** | **270** | **60** | 6,594 |
+| 64 | 822 | **40** | **270** | **60** | 13,122 |
+
+The selective request reads exactly one membership row and one facet throughout. Full enumeration reads exactly `P` membership rows and grows with the real output size.
+
+Predicate-presence mutation now avoids a P-sized profile rewrite:
+
+| existing P | v0.15 add work | v0.16 add work | v0.15 delete work | v0.16 delete work | v0.16 membership bytes written per delta |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 58 | **54** | 41 | **37** | **34** |
+| 4 | 64 | **54** | 47 | **37** | **34** |
+| 8 | 76 | **54** | 59 | **37** | **34** |
+| 16 | 100 | **54** | 83 | **37** | **34** |
+| 32 | 148 | **54** | 131 | **37** | **34** |
+| 64 | 244 | **54** | 227 | **37** | **34** |
+
+At fixed local work, `H={1,8,64}` gives maintenance **27**, selective payload **270 bytes**, and **60 VM steps** throughout. The same three measures remain fixed across unrelated `N={100,1000,10000,50000}`.
+
+However, the `dbstat` membership-index B-tree height is **2, 2, 3, 3** across that N sweep. This matters: SQLite's VM progress callback counts a B-tree `Seek` as an instruction but does not count every internal page traversed by the seek.
+
+Therefore the surviving statement is deliberately narrower:
 
 \[
 \boxed{
-Maintenance_{evidence/value}=O(K),\qquad
-SelectiveFacetReads=O(K),\qquad
-FullFacetReads=O(P)
+\begin{aligned}
+&Maintenance_{evidence/value}=O(K)\text{ logical work},\\
+&SelectiveSQLReturnedBytes\approx O(K)\text{ in the tested fixed-size facet fixture},\\
+&TopologyDeltaSerializedWork\approx O(K),\\
+&FullProfileWork=O(P).
+\end{aligned}
 }
 \]
 
-under the experiment's logical-operation accounting and with exact v0.14 full-profile semantics.
+v0.16 removes the hidden serialized `O(P)` manifest but **does not** establish globally constant physical page I/O.
 
-The same evidence exposes the next limitation: the manifest grows from 66 to 822 serialized bytes as `P` grows from 1 to 64, and every selective read currently loads that full row. Therefore v0.15 does **not** establish physical `O(K)` bytes, page I/O, or CPU time independent of `P`.
-
-See `RESULTS_V0.15.md`, `compositional_profile_results.json`, and `verify_compositional_profile_results.py`.
+See `RESULTS_V0.16.md`, `normalized_membership_results.json`, and `verify_normalized_membership_results.py`.
 
 ## Reproducing the hardened path
 
@@ -259,6 +291,7 @@ python run_planner_experiment.py
 python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
 python run_compositional_profile_experiment.py
+python run_normalized_membership_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -268,6 +301,7 @@ python verify_growth_results.py
 python verify_predicate_schema_results.py
 python verify_subject_fanout_results.py
 python verify_compositional_profile_results.py
+python verify_normalized_membership_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -278,8 +312,9 @@ CI runs this chain on pull requests and uploads the hardened evidence ledgers as
 Canonical evidence
   -> revisable assertion history
   -> transactional current heads where repeated current reconstruction earns them
+  -> normalized current predicate membership
   -> predicate-specific evidence-bearing facets
-  -> subject profile manifest / compositional logical profile
+  -> constant-size subject profile descriptor / compositional logical profile
   -> selectively materialized state / derived views
 
 Question
@@ -288,6 +323,7 @@ Question
   -> justified hard constraints
   -> coverage-controlled retrieval
   -> requested semantic subset
+  -> indexed membership validation
   -> one-snapshot facet assembly
   -> bounded context compilation
 
@@ -300,13 +336,14 @@ Canonical mutation
   -> create required absent materializations
   -> reconstruct according to stable semantic identity
   -> update/reuse current-head materializations
+  -> synchronize only affected membership rows
   -> repair only affected evidence-bearing facets when topology is unchanged
-  -> update profile topology when predicate presence changes
+  -> maintain constant-size profile descriptor lifecycle
   -> selective retirement
   -> crash-safe completion
 ```
 
-Four distinctions are now central:
+Five distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -316,20 +353,19 @@ Four distinctions are now central:
 
 > Counting one row as one operation is not enough to prove locality when that row's serialized size grows with semantic fan-out.
 
-## Next falsification target — normalized predicate membership
+> Counting one indexed `Seek` as one VM operation is not enough to prove physical locality when the underlying B-tree height grows with global memory.
 
-v0.15 removes subject-wide evidence reconstruction from the common evidence/value maintenance path, but its predicate manifest is still a serialized `O(P)` object. A `K=1` selective read currently deserializes all `P` predicate names, and predicate-presence changes can require rewriting that manifest.
+## Next falsification target — page-local indexed lookup
+
+v0.16 removes the serialized `O(P)` predicate manifest, but the normalized membership index is still a global B-tree. In the fixed N sweep, its measured height grows from 2 to 3 even while SQL-returned bytes and VM instruction counts remain constant.
 
 The next question is therefore:
 
 \[
 \boxed{
-Can selective physical work and predicate-topology delta work scale with K
-without touching an O(P) manifest,
-while full enumeration remains honestly O(P)?
+Can task-local lookup page working set remain bounded as global durable memory grows,
+without sacrificing exact semantics or honest full enumeration?
 }
 \]
 
-A candidate v0.16 mechanism is normalized, indexed predicate membership such as `(subject,predicate)` rows. Selective reads would validate requested predicates by `K` indexed probes; topology mutations would update only changed membership rows; full profile enumeration would still stream all `P` memberships/facets.
-
-The experiment must add byte-/row-/page-sensitive instrumentation so an arbitrarily large value cannot hide behind a single logical row read. It must retain exact v0.15/v0.14 logical semantics, history/global locality, topology lifecycle correctness, and the existing one-snapshot stale-read protection.
+A v0.17 experiment should measure actual or defensible upper-bounded lookup page traversal and compare the global B-tree against an explicitly partitioned or otherwise page-local address structure. The experiment must preserve exact v0.16/v0.15 logical semantics, crash/read-safety invariants, topology lifecycle correctness, and full-profile honesty. No physical global-memory-independence claim should survive merely because the SQL query plan says `SEARCH` rather than `SCAN`.
