@@ -22,6 +22,7 @@ jobs:
       - run: python run_maintenance_experiment.py
       - run: python run_compositional_profile_experiment.py
       - run: python run_normalized_membership_experiment.py
+      - run: python run_page_locality_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -32,6 +33,7 @@ jobs:
       - run: python verify_subject_fanout_results.py
       - run: python verify_compositional_profile_results.py
       - run: python verify_normalized_membership_results.py
+      - run: python verify_page_locality_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -71,4 +73,9 @@ jobs:
         with:
           name: v0.16-normalized-membership-results
           path: normalized_membership_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.17-page-locality-results
+          path: page_locality_results.json
           if-no-files-found: error
