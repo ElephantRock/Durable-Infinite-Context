@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.20
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.21
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -88,7 +88,8 @@ Current evidence does **not** establish:
 - constant B-tree traversal depth as global indexes grow;
 - a crash-safe bounded-migration hash/direct-address replacement for the current B-tree;
 - zero-failure bounded-work hash placement under arbitrary collision patterns;
-- a bounded escape path after local placement failure;
+- unlimited adversarial admission with fixed mutation, lookup, and space bounds;
+- a durable hybrid overflow path after bounded placement escalation is exhausted;
 - constant work for arbitrarily large individual facet values;
 - a strong agentic-RAG superiority result.
 
@@ -118,297 +119,115 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.18 | Is conventional bounded-load hashing sufficient to get both expected constant lookup pages and global-N-independent mutation work? | No. Successful lookup stayed at p95=1 page and max=2 in the tested model, but stop-the-world capacity doubling rehashed every prior live row, creating `Theta(N)` mutation spikes. |
 | v0.19 | Can a fixed-budget two-generation rehash remove that single-mutation resize spike without unbounded migration fan-out? | Partly. Source migration is bounded at 8 slots/rows per insertion, all tested migrations complete, lookup touches at most two generations, and temporary capacity is 1.5x. But destination linear-probe work still develops an N-growing tail, so total mutation work is not established as globally bounded. |
 | v0.20 | Can placement itself have a finite mutation-work cap under ordinary growth and controlled collisions? | Yes as a bounded-work contract: a 4-slot, two-choice cuckoo candidate with 32 kicks and an 8-entry stash never exceeds 200 modeled slot operations and stays failure-free in ordinary growth. But a concentrated two-bucket domain admits only 16 keys; the 17th fails explicitly, exposing the availability trade-off. |
+| v0.21 | Can local placement failure escape through a fixed finite sequence of bounded domains without recreating unbounded locality? | Yes as bounded escalation: with `D` domains, concentrated capacity is `16D`, first failure is `16D+1`, mutation work is bounded by `200D`, and missing-key lookup by `3D` logical pages. But every fixed `D` still has finite admission capacity and pays proportional reserved space. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
 ## Selected validated measurements
 
-### v0.9 real process-crash recovery
+### Durable recovery and topology correctness
 
-Three mutation classes across eleven failpoints (**33 real SIGKILL cases**) pass. In the strongest fixed-region case, recovery remains **28 logical operations** from 100 through 50,000 entities while full reconstruction grows from 1,387 to 699,987.
+The persistent path is already hardened independently of the experimental hash-placement work:
 
-### v0.10 durable multi-intent concurrency
+- v0.9 passed **33 real `SIGKILL` cases** under SQLite WAL + `synchronous=FULL`;
+- fixed-region recovery stayed at **28 logical operations** from 100 through 50,000 entities while full reconstruction grew from 1,387 to 699,987;
+- v0.10 preserved ordered multi-intent conflict/recovery semantics;
+- v0.11 added promotion-time topology revalidation after exposing admission-time stale impact metadata;
+- v0.12 made missing required outputs explicit rather than assuming materializations already exist;
+- v0.13 corrected subject-profile semantic identity;
+- v0.14 removed historical-depth dependence from current predicate reconstruction with transactional heads.
 
-For the fixed three-intent crash/recovery workload:
+See the corresponding `RESULTS_V0.*.md` files and executable verifiers for exact workloads.
 
-| Entities | Recovery work | Full rebuild |
-|---:|---:|---:|
-| 100 | **106** | 1,387 |
-| 1,000 | **106** | 13,987 |
-| 10,000 | **106** | 139,987 |
-| 50,000 | **106** | 699,987 |
+### v0.15–v0.16 selective profile locality
 
-### v0.11 topology-dependent revalidation
+v0.15 decomposes the subject profile into predicate facets. At fixed `K=1,H=8,N=128`, maintenance stays **27 logical operations** while `P` grows from 1 to 64; full assembly still grows with legitimate live predicate fan-out. The experiment also exposed that the serialized predicate manifest grows from **66 to 822 bytes**.
 
-Admission-time topology-derived impact can become stale after an earlier intent changes canonical topology. Revalidating that impact at promotion restores read protection. Fixed two-intent recovery stays **111** through 50k unrelated entities.
+v0.16 replaces that manifest with normalized membership and a **40-byte subject descriptor**. For fixed `K=1`, selective SQL payload remains **270 bytes** and measured VM steps remain **60** across `P=1..64`, while full returned payload grows with the actual output. Predicate topology add/delete work becomes P-invariant in the measured path.
 
-### v0.12 local topology growth
-
-Canonical truth can move to a previously unmaterialized subject while every existing derived node remains fresh. Explicit missing-output obligations restore completeness. Corrected recovery work is **76** through 50k unrelated entities; the earlier 72 figure omitted four deterministic existence probes and is retained as an instrumentation failure.
-
-### v0.13 semantic identity consistency
-
-A subject-only profile cannot coherently mean “deadline profile.” The corrected semantics are:
-
-\[
-Profile(subject)=Aggregate(CurrentAssertions(subject))
-\]
-
-State/support/context remain predicate-specific. Predicate replacement recovery stays **70** through 50k unrelated entities with fixed local predicate/history size.
-
-### v0.14 subject-local fan-out and history
-
-Let:
-
-\[
-P=\text{live predicates represented by the subject profile}
-\]
-
-\[
-H=\text{historical assertion depth per predicate}
-\]
-
-The v0.13 control rescans subject history. At `P=8`:
-
-| H | v0.13 work | v0.14 work |
-|---:|---:|---:|
-| 1 | 87 | **95** |
-| 2 | 95 | **95** |
-| 4 | 111 | **95** |
-| 8 | 143 | **95** |
-| 16 | 207 | **95** |
-| 32 | 335 | **95** |
-| 64 | 591 | **95** |
-
-v0.14 maintains a transactional current head per `(subject,predicate)` and reconstructs the profile from one current assertion per live predicate.
-
-The small-history trade-off is preserved: at `H=1`, indexing costs 95 versus 87 for direct scanning. The index earns its complexity as history deepens or predictable current-state cost matters.
-
-True live predicate fan-out remains visible:
-
-| P | Recovery work |
-|---:|---:|
-| 1 | 39 |
-| 2 | 47 |
-| 4 | 63 |
-| 8 | 95 |
-| 16 | 159 |
-| 32 | 287 |
-
-With fixed `P=8,H=8`, unrelated global cardinality remains irrelevant to the logical recovery count:
-
-| Entities | Recovery work | Full rebuild |
-|---:|---:|---:|
-| 100 | **95** | 1,659 |
-| 1,000 | **95** | 14,259 |
-| 10,000 | **95** | 140,259 |
-| 50,000 | **95** | 700,259 |
-
-### v0.15 compositional profile facets
-
-Let:
-
-\[
-K=\text{changed/requested profile facets}, \qquad K\le P
-\]
-
-v0.15 persists a subject predicate manifest and reuses predicate-specific support materializations as evidence-bearing facets. The first CI run failed exact cross-version equivalence because the assembled Python representation used tuples where v0.14 persisted JSON used lists; that interface mismatch was corrected and regression-tested rather than normalized away.
-
-At fixed `K=1,H=8,N=128`:
-
-| P | v0.14 maintenance | v0.15 maintenance | Partial logical assembly | Full logical assembly | Manifest bytes |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 39 | **27** | **3** | 3 | 66 |
-| 2 | 47 | **27** | **3** | 4 | 78 |
-| 4 | 63 | **27** | **3** | 6 | 102 |
-| 8 | 95 | **27** | **3** | 10 | 150 |
-| 16 | 159 | **27** | **3** | 18 | 246 |
-| 32 | 287 | **27** | **3** | 34 | 438 |
-| 64 | 543 | **27** | **3** | 66 | 822 |
-
-At fixed `P=32`:
-
-| K | v0.14 maintenance | v0.15 maintenance | Partial logical assembly | Full logical assembly |
-|---:|---:|---:|---:|---:|
-| 1 | 287 | **27** | 3 | 34 |
-| 2 | 574 | **54** | 4 | 34 |
-| 4 | 1,148 | **108** | 6 | 34 |
-| 8 | 2,296 | **216** | 10 | 34 |
-| 16 | 4,592 | **432** | 18 | 34 |
-
-The evidence supports logical subset locality, but the manifest grows from 66 to 822 serialized bytes as `P` grows from 1 to 64. That failure motivates v0.16.
-
-See `RESULTS_V0.15.md`, `compositional_profile_results.json`, and `verify_compositional_profile_results.py`.
-
-### v0.16 normalized predicate membership
-
-v0.16 replaces the serialized predicate manifest with a **40-byte subject descriptor** and normalized indexed membership rows.
-
-At fixed `K=1,H=8,N=128`:
-
-| P | v0.15 manifest bytes | v0.16 descriptor bytes | selective SQL payload bytes | selective VM steps | full SQL payload bytes |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 66 | **40** | **270** | **60** | 270 |
-| 2 | 78 | **40** | **270** | **60** | 474 |
-| 4 | 102 | **40** | **270** | **60** | 882 |
-| 8 | 150 | **40** | **270** | **60** | 1,698 |
-| 16 | 246 | **40** | **270** | **60** | 3,330 |
-| 32 | 438 | **40** | **270** | **60** | 6,594 |
-| 64 | 822 | **40** | **270** | **60** | 13,122 |
-
-The selective request reads exactly one membership row and one facet throughout. Full enumeration reads exactly `P` membership rows and grows with the real output size.
-
-Predicate-presence mutation now avoids a P-sized profile rewrite:
-
-| existing P | v0.15 add work | v0.16 add work | v0.15 delete work | v0.16 delete work | v0.16 membership bytes written per delta |
-|---:|---:|---:|---:|---:|---:|
-| 2 | 58 | **54** | 41 | **37** | **34** |
-| 4 | 64 | **54** | 47 | **37** | **34** |
-| 8 | 76 | **54** | 59 | **37** | **34** |
-| 16 | 100 | **54** | 83 | **37** | **34** |
-| 32 | 148 | **54** | 131 | **37** | **34** |
-| 64 | 244 | **54** | 227 | **37** | **34** |
-
-At fixed local work, `H={1,8,64}` gives maintenance **27**, selective payload **270 bytes**, and **60 VM steps** throughout. The same three measures remain fixed across unrelated `N={100,1000,10000,50000}`.
-
-However, the `dbstat` membership-index B-tree height is **2, 2, 3, 3** across that N sweep. This matters: SQLite's VM progress callback counts a B-tree `Seek` as an instruction but does not count every internal page traversed by the seek.
-
-Therefore the surviving statement is deliberately narrower:
-
-\[
-\boxed{
-\begin{aligned}
-&Maintenance_{evidence/value}=O(K)\text{ logical work},\\
-&SelectiveSQLReturnedBytes\approx O(K)\text{ in the tested fixed-size facet fixture},\\
-&TopologyDeltaSerializedWork\approx O(K),\\
-&FullProfileWork=O(P).
-\end{aligned}
-}
-\]
-
-v0.16 removes the hidden serialized `O(P)` manifest but **does not** establish globally constant physical page I/O.
-
-See `RESULTS_V0.16.md`, `normalized_membership_results.json`, and `verify_normalized_membership_results.py`.
+The remaining caveat is physical lookup depth: `dbstat` shows the membership B-tree height grows with global N, so a single VM `Seek` is not evidence of constant physical page traversal.
 
 ### v0.17 B-tree page locality
 
-v0.17 tested whether a fixed number of hash-partitioned B-tree indexes could convert the remaining page-level dependence into a constant bound. It could not.
+With 4096-byte pages, global B-tree height grows from 2 to 3 over the tested N range. A fixed 64-way partition delays the transition but its maximum shard height also eventually grows:
 
-With 4096-byte pages and identical small membership keys:
+| Membership rows `N` | Global height | 64-way max shard height |
+|---:|---:|---:|
+| 1,000 | 2 | 1 |
+| 10,000 | 2 | 2 |
+| 50,000 | 3 | 2 |
+| 250,000 | 3 | 2 |
+| 1,000,000 | 3 | 3 |
 
-| Membership rows `N` | Global B-tree height | 64-way max shard rows | 64-way max shard height |
-|---:|---:|---:|---:|
-| 1,000 | 2 | 28 | 1 |
-| 10,000 | 2 | 188 | 2 |
-| 50,000 | 3 | 840 | 2 |
-| 250,000 | 3 | 4,077 | 2 |
-| 1,000,000 | 3 | 15,932 | 3 |
-
-The partition is genuinely useful at intermediate scale: it delays a root-to-leaf height transition. But because any fixed shard count `S` leaves `Theta(N/S)` rows per shard, it does not change the comparison-index asymptotic:
+For fixed finite shard count `S`, the comparison-index class remains:
 
 \[
-\boxed{
-AddressLookupPages=\Theta(\log_B(N/S))=\Theta(\log_B N)
-}
+\boxed{AddressLookupPages=\Theta(\log_B(N/S))=\Theta(\log_B N)}
 \]
 
-for fixed finite `S`.
+### v0.18–v0.19 hash resize locality
 
-This is a negative result: **fixed B-tree sharding is not being merged as an asymptotic locality mechanism**. The current production candidate remains the simpler normalized global membership index, with logarithmic page-level addressability rather than a false constant-page claim.
+v0.18 shows that expected constant-page successful lookup is not enough. Conventional capacity doubling produces largest single resize migrations:
 
-See `RESULTS_V0.17.md`, `page_locality_results.json`, and `verify_page_locality_results.py`.
+`512, 2,048, 8,192, 32,768, 131,072` rows
 
-### v0.18 bounded-load hash resize envelope
+at checkpoints `N={1k,4k,16k,64k,256k}`.
 
-v0.18 tested a deterministic open-addressed hash index at maximum load `0.50` with 64 logical slots per page. The lookup side is excellent in the controlled model:
+v0.19 spreads that migration across insertions. Every insertion scans at most **8 source slots** and copies at most **8 old rows**, all 12 migrations complete, lookup touches at most two generations, and temporary capacity amplification is **1.5x**. But total mutation slot-work maxima still grow:
 
-| Membership rows `N` | Lookup page p50 | Lookup page p95 | Lookup page max |
-|---:|---:|---:|---:|
-| 1,000 | 1 | 1 | 2 |
-| 4,000 | 1 | 1 | 2 |
-| 16,000 | 1 | 1 | 2 |
-| 64,000 | 1 | 1 | 2 |
-| 256,000 | 1 | 1 | 2 |
+`26, 26, 35, 39, 50`
 
-But conventional capacity doubling moves the non-locality to mutation time:
-
-| Membership rows `N` | Largest single resize migration |
-|---:|---:|
-| 1,000 | 512 rows |
-| 4,000 | 2,048 rows |
-| 16,000 | 8,192 rows |
-| 64,000 | 32,768 rows |
-| 256,000 | 131,072 rows |
-
-Each resize rehashes every row that was live before the triggering insertion, so:
-
-\[
-\boxed{ResizeSpike(N)=\Theta(N)}
-\]
-
-The cumulative rehash work through 256k rows is **262,080 row migrations**, beyond the ordinary insertions. Therefore a stop-the-world resized hash table does **not** earn replacement of the simpler production B-tree: expected constant lookup alone is insufficient when growth can charge a global migration spike to one logical mutation.
-
-See `RESULTS_V0.18.md`, `hash_resize_results.json`, and `verify_hash_resize_results.py`.
-
-### v0.19 incremental hash migration
-
-v0.19 replaces stop-the-world rehash with a two-generation migration model. Every insertion scans at most **8 source slots** and copies at most **8 old rows** while a resize is active.
-
-| Membership rows `N` | v0.18 largest single resize rows | v0.19 max source slots scanned/insert | v0.19 max rows copied/insert | v0.19 interval max total mutation slot work |
-|---:|---:|---:|---:|---:|
-| 1,000 | 512 | **8** | **8** | 26 |
-| 4,000 | 2,048 | **8** | **8** | 26 |
-| 16,000 | 8,192 | **8** | **8** | 35 |
-| 64,000 | 32,768 | **8** | **8** | 39 |
-| 256,000 | 131,072 | **8** | **8** | 50 |
-
-All **12** tested migrations complete under sustained insertion. Mid-migration lookup touches at most **2 generations**; the recorded migration snapshots have page p95 **2** and page max **3**. Temporary allocated slot capacity is exactly **1.5x** the target/current generation during migration.
-
-The mechanism does not remove aggregate migration work. Through 256k rows it still copies **262,080 rows**, matching the v0.18 resize-row total, while scanning **524,160 source slots**. It changes the scheduling envelope: the source-side migration charge is bounded per mutation rather than concentrated into a single `Theta(N)` resize event.
-
-But the experiment exposed a second locality failure. Total mutation slot-work maxima grow from **26** to **50** because destination placement still uses linear probing. A fixed source migration budget therefore does **not** establish worst-case constant total mutation work.
-
-The defensible surviving statement is:
-
-\[
-\boxed{
-\begin{aligned}
-&SourceMigrationScanPerMutation\le 8,\\
-&RowsCopiedPerMutation\le 8,\\
-&LookupGenerationFanout\le 2,\\
-&TemporaryCapacityAmplification=1.5,\\
-&TotalMutationPlacementWork\text{ remains unbounded by this evidence.}
-\end{aligned}
-}
-\]
-
-The hash candidate is still an algorithmic experiment, not the production address index. Persistence/crash safety has deliberately not been claimed yet.
-
-See `RESULTS_V0.19.md`, `incremental_hash_results.json`, and `verify_incremental_hash_results.py`.
+because destination linear probing retains an unbounded collision tail.
 
 ### v0.20 bounded placement locality
 
-v0.20 replaces the unbounded linear-probe placement tail with a finite two-choice bucketized cuckoo contract: 4 slots per bucket, at most 32 relocations, and an 8-entry stash.
+The fixed two-choice bucketized cuckoo candidate uses 4 slots per bucket, at most 32 relocations, and an 8-entry stash.
 
-| Membership rows `N` | Linear max insert probes | Cuckoo failures | Cuckoo max mutation slot work | Cuckoo lookup page max |
+| Membership rows `N` | Linear max insert probes | Cuckoo failures | Cuckoo max mutation work | Cuckoo lookup page max |
 |---:|---:|---:|---:|---:|
-| 1,000 | 11 | **0** | **17** | **2** |
-| 4,000 | 19 | **0** | **17** | **2** |
-| 16,000 | 21 | **0** | **22** | **2** |
-| 64,000 | 31 | **0** | **27** | **2** |
-| 256,000 | 34 | **0** | **30** | **2** |
+| 1,000 | 11 | 0 | 17 | 2 |
+| 4,000 | 19 | 0 | 17 | 2 |
+| 16,000 | 21 | 0 | 22 | 2 |
+| 64,000 | 31 | 0 | 27 | 2 |
+| 256,000 | 34 | 0 | 30 | 2 |
 
-The modeled worst-case insertion contract is **200 slot operations**. Controlled collision stress forces every stress key into the same two cuckoo buckets. The candidate admits 16 such keys—8 bucket entries plus 8 stash entries—and the 17th key fails at exactly the 200-operation cap. Wider collision sets continue to fail within the same cap, while rollback preserves all 16 previously admitted keys.
-
-Thus the surviving distinction is:
+The modeled worst-case insertion contract is **200 slot operations**. Controlled collisions force every stress key into the same two buckets. The candidate admits 16 such keys and rejects the 17th at exactly the bound while preserving all prior admissions.
 
 \[
 \boxed{BoundedPlacementWork \neq GuaranteedInsertionAvailability}
 \]
 
-The bounded candidate improves the placement locality contract but is still not the production index because it lacks a bounded escape path after local admission failure and has not been integrated with persistent migration.
+### v0.21 bounded placement escape
 
-See `RESULTS_V0.20.md`, `bounded_placement_results.json`, and `verify_bounded_placement_results.py`.
+v0.21 composes a fixed finite sequence of independent v0.20 domains. Ordinary growth reserves four domains but never leaves the first domain in the tested workload: insertion failures remain zero, maximum attempted domains remain one, maximum lookup pages remain two, and observed mutation maxima remain `17,17,22,27,30` across `N={1k,4k,16k,64k,256k}`.
+
+Concentrated collision stress reproduces the fixed trade-off exactly:
+
+| Domains `D` | Concentrated capacity | First failure | Max mutation work | Missing lookup pages | Reserved capacity |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 16 | 17 | 200 | 3 | 1x |
+| 2 | 32 | 33 | 400 | 6 | 2x |
+| 4 | 64 | 65 | 800 | 12 | 4x |
+| 8 | 128 | 129 | 1,600 | 24 | 8x |
+
+Every admitted key remains retrievable after later failed insertions.
+
+For fixed finite `D`:
+
+\[
+\boxed{
+\begin{aligned}
+ConcentratedCapacity(D)&=16D,\\
+MutationWorkCap(D)&=200D,\\
+MissingLookupPageCap(D)&=3D,\\
+ReservedSpaceAmplification(D)&=D.
+\end{aligned}
+}
+\]
+
+This is a real bounded escape mechanism, but not an unlimited-admission solution. Letting `D` grow without bound would simply move non-locality into mutation work, lookup fan-out, and reserved space.
+
+See `RESULTS_V0.21.md`, `bounded_escape_results.json`, and `verify_bounded_escape_results.py`.
 
 ## Reproducing the hardened path
 
@@ -423,6 +242,7 @@ python run_page_locality_experiment.py
 python run_hash_resize_experiment.py
 python run_incremental_hash_experiment.py
 python run_bounded_placement_experiment.py
+python run_bounded_escape_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -437,6 +257,7 @@ python verify_page_locality_results.py
 python verify_hash_resize_results.py
 python verify_incremental_hash_results.py
 python verify_bounded_placement_results.py
+python verify_bounded_escape_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -478,7 +299,9 @@ Canonical mutation
   -> crash-safe completion
 ```
 
-Nine distinctions are now central:
+The v0.18–v0.21 hash/cuckoo structures remain **experimental alternatives**, not replacements for the production candidate above.
+
+Ten distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -496,19 +319,33 @@ Nine distinctions are now central:
 
 > Bounding migration scheduling does not bound total mutation work when the placement primitive itself has an unbounded collision/probe tail.
 
-> Bounding placement work does not guarantee insertion availability; finite local capacity requires an explicit bounded failure/escape policy.
+> Bounding placement work does not guarantee insertion availability; finite local capacity requires an explicit failure/escape policy.
 
-## Next falsification target — bounded placement escape
+> Finite bounded escalation raises the admission threshold only by paying proportional mutation, lookup, and space bounds; unlimited admission requires an explicit exceptional path.
 
-v0.20 establishes an explicit placement-work cap in the algorithmic model, but concentrated demand exhausts two candidate buckets plus the finite stash. Rejecting the 17th concentrated key preserves locality and correctness, yet an address index that simply rejects durable membership is incomplete.
+## Next falsification target — explicit rare overflow
+
+v0.21 shows that fixed finite domain escalation is internally coherent but cannot provide unlimited adversarial admission without abandoning its fixed locality contract.
 
 The next question is therefore:
 
 \[
 \boxed{
-Can local placement failure obtain a bounded escape path
-without reintroducing unbounded lookup, global rehash, or hidden overflow scans?
+Can a bounded common placement path coexist with an explicit rare overflow path
+without contaminating common-path locality or hiding unbounded work?
 }
 \]
 
-A v0.21 experiment should compare a small fixed number of independent bounded placement domains or another explicitly bounded escalation mechanism. It must measure the end-to-end mutation bound including escalation, maximum lookup domain/page fan-out, total reserved-space amplification, failure threshold under concentrated collisions, and preservation of admitted keys. Only after admission availability and placement locality survive together should the project integrate the mechanism with v0.19-style incremental migration and pay for durable crash/restart and stale-read testing.
+A v0.22 experiment should keep the bounded common path fixed and route only exhausted placements to an explicit comparison-index or similarly durable exceptional structure. It must measure:
+
+- overflow incidence under ordinary and controlled collision workloads;
+- common-path mutation and lookup locality with overflow present;
+- overflow mutation and lookup cost as overflow cardinality grows;
+- missing-key lookup fan-out;
+- whether overflow state can be identified directly without an unbounded scan;
+- total space amplification;
+- exact preservation of admitted membership semantics.
+
+A logarithmic exceptional path is acceptable evidence if it is explicit, rare under the tested common workload, and isolated from the bounded common path. The project should prefer that honest hybrid over a false claim of universally constant work.
+
+Only after the admission policy survives this test should the experimental hash path be integrated with incremental migration and subjected to persistent crash/restart and stale-read falsification.
