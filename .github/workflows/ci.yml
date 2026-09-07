@@ -24,6 +24,7 @@ jobs:
       - run: python run_normalized_membership_experiment.py
       - run: python run_page_locality_experiment.py
       - run: python run_hash_resize_experiment.py
+      - run: python run_incremental_hash_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -36,6 +37,7 @@ jobs:
       - run: python verify_normalized_membership_results.py
       - run: python verify_page_locality_results.py
       - run: python verify_hash_resize_results.py
+      - run: python verify_incremental_hash_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -85,4 +87,9 @@ jobs:
         with:
           name: v0.18-hash-resize-results
           path: hash_resize_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.19-incremental-hash-results
+          path: incremental_hash_results.json
           if-no-files-found: error
