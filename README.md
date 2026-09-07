@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.19
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.20
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -87,7 +87,8 @@ Current evidence does **not** establish:
 - direct operating-system/storage-device page-read locality independent of global memory;
 - constant B-tree traversal depth as global indexes grow;
 - a crash-safe bounded-migration hash/direct-address replacement for the current B-tree;
-- globally bounded total hash-mutation work under arbitrary collision patterns;
+- zero-failure bounded-work hash placement under arbitrary collision patterns;
+- a bounded escape path after local placement failure;
 - constant work for arbitrarily large individual facet values;
 - a strong agentic-RAG superiority result.
 
@@ -116,6 +117,7 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.17 | Can fixed B-tree partitioning make cold point-lookup index-page traversal independent of global `N`? | No. 64-way hash partitioning delays page-height transitions but its maximum shard height still grows at sufficiently large N. Fixed finite B-tree sharding remains `Theta(log_B N)` in page levels. |
 | v0.18 | Is conventional bounded-load hashing sufficient to get both expected constant lookup pages and global-N-independent mutation work? | No. Successful lookup stayed at p95=1 page and max=2 in the tested model, but stop-the-world capacity doubling rehashed every prior live row, creating `Theta(N)` mutation spikes. |
 | v0.19 | Can a fixed-budget two-generation rehash remove that single-mutation resize spike without unbounded migration fan-out? | Partly. Source migration is bounded at 8 slots/rows per insertion, all tested migrations complete, lookup touches at most two generations, and temporary capacity is 1.5x. But destination linear-probe work still develops an N-growing tail, so total mutation work is not established as globally bounded. |
+| v0.20 | Can placement itself have a finite mutation-work cap under ordinary growth and controlled collisions? | Yes as a bounded-work contract: a 4-slot, two-choice cuckoo candidate with 32 kicks and an 8-entry stash never exceeds 200 modeled slot operations and stays failure-free in ordinary growth. But a concentrated two-bucket domain admits only 16 keys; the 17th fails explicitly, exposing the availability trade-off. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
@@ -384,6 +386,30 @@ The hash candidate is still an algorithmic experiment, not the production addres
 
 See `RESULTS_V0.19.md`, `incremental_hash_results.json`, and `verify_incremental_hash_results.py`.
 
+### v0.20 bounded placement locality
+
+v0.20 replaces the unbounded linear-probe placement tail with a finite two-choice bucketized cuckoo contract: 4 slots per bucket, at most 32 relocations, and an 8-entry stash.
+
+| Membership rows `N` | Linear max insert probes | Cuckoo failures | Cuckoo max mutation slot work | Cuckoo lookup page max |
+|---:|---:|---:|---:|---:|
+| 1,000 | 11 | **0** | **17** | **2** |
+| 4,000 | 19 | **0** | **17** | **2** |
+| 16,000 | 21 | **0** | **22** | **2** |
+| 64,000 | 31 | **0** | **27** | **2** |
+| 256,000 | 34 | **0** | **30** | **2** |
+
+The modeled worst-case insertion contract is **200 slot operations**. Controlled collision stress forces every stress key into the same two cuckoo buckets. The candidate admits 16 such keys—8 bucket entries plus 8 stash entries—and the 17th key fails at exactly the 200-operation cap. Wider collision sets continue to fail within the same cap, while rollback preserves all 16 previously admitted keys.
+
+Thus the surviving distinction is:
+
+\[
+\boxed{BoundedPlacementWork \neq GuaranteedInsertionAvailability}
+\]
+
+The bounded candidate improves the placement locality contract but is still not the production index because it lacks a bounded escape path after local admission failure and has not been integrated with persistent migration.
+
+See `RESULTS_V0.20.md`, `bounded_placement_results.json`, and `verify_bounded_placement_results.py`.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -396,6 +422,7 @@ python run_normalized_membership_experiment.py
 python run_page_locality_experiment.py
 python run_hash_resize_experiment.py
 python run_incremental_hash_experiment.py
+python run_bounded_placement_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -409,6 +436,7 @@ python verify_normalized_membership_results.py
 python verify_page_locality_results.py
 python verify_hash_resize_results.py
 python verify_incremental_hash_results.py
+python verify_bounded_placement_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -450,7 +478,7 @@ Canonical mutation
   -> crash-safe completion
 ```
 
-Eight distinctions are now central:
+Nine distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -468,17 +496,19 @@ Eight distinctions are now central:
 
 > Bounding migration scheduling does not bound total mutation work when the placement primitive itself has an unbounded collision/probe tail.
 
-## Next falsification target — bounded placement locality
+> Bounding placement work does not guarantee insertion availability; finite local capacity requires an explicit bounded failure/escape policy.
 
-v0.19 removes the stop-the-world resize charge from one mutation, but its destination linear probing exposes a growing placement-work tail. Crash-safe persistence would be premature while the in-memory placement mechanism still lacks a defensible mutation bound.
+## Next falsification target — bounded placement escape
+
+v0.20 establishes an explicit placement-work cap in the algorithmic model, but concentrated demand exhausts two candidate buckets plus the finite stash. Rejecting the 17th concentrated key preserves locality and correctness, yet an address index that simply rejects durable membership is incomplete.
 
 The next question is therefore:
 
 \[
 \boxed{
-Can membership placement retain shallow lookup while providing a defensible
-collision/relocation bound as global cardinality and adversarial collision pressure grow?
+Can local placement failure obtain a bounded escape path
+without reintroducing unbounded lookup, global rehash, or hidden overflow scans?
 }
 \]
 
-A v0.20 experiment should compare bounded-choice/relocation mechanisms such as bucketized cuckoo hashing or another explicitly bounded placement scheme against the v0.19 linear-probe control. It must sweep ordinary growth and controlled collision stress, measure lookup bucket/page fan-out, maximum relocations or stash/overflow work, insertion failure probability, space amplification, and total per-mutation work. Only after a placement mechanism survives that falsification should the project pay for crash-safe persistent migration and stale-read testing.
+A v0.21 experiment should compare a small fixed number of independent bounded placement domains or another explicitly bounded escalation mechanism. It must measure the end-to-end mutation bound including escalation, maximum lookup domain/page fan-out, total reserved-space amplification, failure threshold under concentrated collisions, and preservation of admitted keys. Only after admission availability and placement locality survive together should the project integrate the mechanism with v0.19-style incremental migration and pay for durable crash/restart and stale-read testing.
