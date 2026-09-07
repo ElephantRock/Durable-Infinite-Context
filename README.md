@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.16
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.17
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: a system that can accumulate durable history without requiring lifetime history to fit inside the model context window.
 
@@ -110,7 +110,8 @@ Real extraction and a genuine strong agentic retrieval baseline remain mandatory
 | v0.13 | Can subject-only profiles remain correct when predicates change/coexist? | v0.12 loses the profile after `deadline -> launch_date`; subject-wide profile semantics restore exact parity. |
 | v0.14 | Can current subject profiles avoid rescanning deep predicate history? | A transactional current-head index removes H-dependence while preserving legitimate P-dependence and global-N logical locality. |
 | v0.15 | Can evidence/value maintenance and selective profile assembly scale with changed/requested subset `K` instead of all live predicates `P`? | In logical row/facet operations, yes: maintenance is proportional to `K`, selective facet reads are proportional to `K`, and full assembly remains proportional to `P`. The experiment exposed an `O(P)` serialized manifest. |
-| v0.16 | Can selective returned work and predicate-topology deltas avoid touching/rebuilding that `O(P)` manifest? | Yes in the measured SQL-returned/serialized path: a 40-byte descriptor plus normalized indexed membership keeps `K=1` returned bytes fixed across `P=1..64`, and topology add/delete work is P-invariant. But `dbstat` shows the global membership B-tree height grows with N, so constant physical page I/O remains unproven. |
+| v0.16 | Can selective returned work and predicate-topology deltas avoid touching/rebuilding that `O(P)` manifest? | Yes in the measured SQL-returned/serialized path: a 40-byte descriptor plus normalized indexed membership keeps `K=1` returned bytes fixed across `P=1..64`, and topology add/delete work is P-invariant. But `dbstat` shows the global membership B-tree height grows with N. |
+| v0.17 | Can fixed B-tree partitioning make cold point-lookup index-page traversal independent of global `N`? | No. 64-way hash partitioning delays page-height transitions but its maximum shard height still grows at sufficiently large N. Fixed finite B-tree sharding remains `Theta(log_B N)` in page levels. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
 
@@ -283,6 +284,34 @@ v0.16 removes the hidden serialized `O(P)` manifest but **does not** establish g
 
 See `RESULTS_V0.16.md`, `normalized_membership_results.json`, and `verify_normalized_membership_results.py`.
 
+### v0.17 B-tree page locality
+
+v0.17 tested whether a fixed number of hash-partitioned B-tree indexes could convert the remaining page-level dependence into a constant bound. It could not.
+
+With 4096-byte pages and identical small membership keys:
+
+| Membership rows `N` | Global B-tree height | 64-way max shard rows | 64-way max shard height |
+|---:|---:|---:|---:|
+| 1,000 | 2 | 28 | 1 |
+| 10,000 | 2 | 188 | 2 |
+| 50,000 | 3 | 840 | 2 |
+| 250,000 | 3 | 4,077 | 2 |
+| 1,000,000 | 3 | 15,932 | 3 |
+
+The partition is genuinely useful at intermediate scale: it delays a root-to-leaf height transition. But because any fixed shard count `S` leaves `Theta(N/S)` rows per shard, it does not change the comparison-index asymptotic:
+
+\[
+\boxed{
+AddressLookupPages=\Theta(\log_B(N/S))=\Theta(\log_B N)
+}
+\]
+
+for fixed finite `S`.
+
+This is a negative result: **fixed B-tree sharding is not being merged as an asymptotic locality mechanism**. The current production candidate remains the simpler normalized global membership index, with logarithmic page-level addressability rather than a false constant-page claim.
+
+See `RESULTS_V0.17.md`, `page_locality_results.json`, and `verify_page_locality_results.py`.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -292,6 +321,7 @@ python run_scalable_planner_experiment.py
 python run_maintenance_experiment.py
 python run_compositional_profile_experiment.py
 python run_normalized_membership_experiment.py
+python run_page_locality_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -302,6 +332,7 @@ python verify_predicate_schema_results.py
 python verify_subject_fanout_results.py
 python verify_compositional_profile_results.py
 python verify_normalized_membership_results.py
+python verify_page_locality_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -323,7 +354,7 @@ Question
   -> justified hard constraints
   -> coverage-controlled retrieval
   -> requested semantic subset
-  -> indexed membership validation
+  -> indexed membership validation with logarithmic B-tree page depth
   -> one-snapshot facet assembly
   -> bounded context compilation
 
@@ -343,7 +374,7 @@ Canonical mutation
   -> crash-safe completion
 ```
 
-Five distinctions are now central:
+Six distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -355,17 +386,19 @@ Five distinctions are now central:
 
 > Counting one indexed `Seek` as one VM operation is not enough to prove physical locality when the underlying B-tree height grows with global memory.
 
-## Next falsification target — page-local indexed lookup
+> Fixed partitioning of a comparison index changes constants and thresholds, not the `Theta(log_B N)` lookup class.
 
-v0.16 removes the serialized `O(P)` predicate manifest, but the normalized membership index is still a global B-tree. In the fixed N sweep, its measured height grows from 2 to 3 even while SQL-returned bytes and VM instruction counts remain constant.
+## Next falsification target — logarithmic addressability envelope
+
+v0.17 rejects a stronger requirement that the current comparison-index lookup must somehow remain constant-page as global memory grows. That does **not** show logarithmic addressability is operationally problematic; B-tree depth grows very slowly at realistic page fan-out.
 
 The next question is therefore:
 
 \[
 \boxed{
-Can task-local lookup page working set remain bounded as global durable memory grows,
-without sacrificing exact semantics or honest full enumeration?
+Is O(\log_B N) indexed addressability practically bounded enough for durable context reconstruction,
+or does a growing direct-address/hash structure earn its additional recovery and resize complexity?
 }
 \]
 
-A v0.17 experiment should measure actual or defensible upper-bounded lookup page traversal and compare the global B-tree against an explicitly partitioned or otherwise page-local address structure. The experiment must preserve exact v0.16/v0.15 logical semantics, crash/read-safety invariants, topology lifecycle correctness, and full-profile honesty. No physical global-memory-independence claim should survive merely because the SQL query plan says `SEARCH` rather than `SCAN`.
+A v0.18 experiment should compare the existing normalized B-tree path against a bounded-occupancy hash/direct-address candidate using the same exact semantics. It must account for lookup-page depth, resize/split work, write amplification, crash recovery, and stale-read protection. A lower lookup asymptotic does not earn its complexity unless it survives those costs.
