@@ -1,0 +1,101 @@
+{
+  "experiment": "v0.28_lazy_generation_allocation",
+  "semantic_guard": {
+    "membership_equal": true,
+    "materialization_equal": true,
+    "head_index_equal": true,
+    "all_derived_fresh": true,
+    "full_assembly_equal": true,
+    "partial_assembly_equal": true
+  },
+  "sweep": {
+    "page_size": 4096,
+    "bucket_size": 4,
+    "sample_count": 4096,
+    "capacities": [
+      32,
+      128,
+      512,
+      2048
+    ],
+    "rows": [
+      {
+        "old_capacity": 32,
+        "new_capacity": 64,
+        "new_bucket_pages": 16,
+        "eager_extension_bytes": 139264,
+        "lazy_first_bucket_bytes": 4096,
+        "lazy_last_bucket_bytes": 126976,
+        "lazy_stash_bytes": 135168,
+        "sampled_p50_bytes": 61440,
+        "sampled_p95_bytes": 126976,
+        "sampled_max_bytes": 126976,
+        "sampled_max_bucket": 15,
+        "sampled_keys": 4096,
+        "pages_materialized_by_first_write": 1
+      },
+      {
+        "old_capacity": 128,
+        "new_capacity": 256,
+        "new_bucket_pages": 64,
+        "eager_extension_bytes": 532480,
+        "lazy_first_bucket_bytes": 4096,
+        "lazy_last_bucket_bytes": 520192,
+        "lazy_stash_bytes": 528384,
+        "sampled_p50_bytes": 258048,
+        "sampled_p95_bytes": 495616,
+        "sampled_max_bytes": 520192,
+        "sampled_max_bucket": 63,
+        "sampled_keys": 4096,
+        "pages_materialized_by_first_write": 1
+      },
+      {
+        "old_capacity": 512,
+        "new_capacity": 1024,
+        "new_bucket_pages": 256,
+        "eager_extension_bytes": 2105344,
+        "lazy_first_bucket_bytes": 4096,
+        "lazy_last_bucket_bytes": 2093056,
+        "lazy_stash_bytes": 2101248,
+        "sampled_p50_bytes": 1069056,
+        "sampled_p95_bytes": 1994752,
+        "sampled_max_bytes": 2093056,
+        "sampled_max_bucket": 255,
+        "sampled_keys": 4096,
+        "pages_materialized_by_first_write": 1
+      },
+      {
+        "old_capacity": 2048,
+        "new_capacity": 4096,
+        "new_bucket_pages": 1024,
+        "eager_extension_bytes": 8396800,
+        "lazy_first_bucket_bytes": 4096,
+        "lazy_last_bucket_bytes": 8384512,
+        "lazy_stash_bytes": 8392704,
+        "sampled_p50_bytes": 4206592,
+        "sampled_p95_bytes": 7958528,
+        "sampled_max_bytes": 8384512,
+        "sampled_max_bucket": 1023,
+        "sampled_keys": 4096,
+        "pages_materialized_by_first_write": 1
+      }
+    ],
+    "address_formula": "physical_page_index = 2 + 2*logical_page_id + copy_slot",
+    "lazy_first_write_formula": "bucket b => (2*b+1)*4096 bytes beyond committed frontier",
+    "algebraic_bucket_worst_case": "4096*(C-1)=Theta(C) for bucket_size=4",
+    "algebraic_stash_case": "4096*(C+1)=Theta(C) for bucket_size=4",
+    "eager_formula": "4096*(C+2)=Theta(C) for bucket_size=4",
+    "measurement_scope": "deterministic arithmetic file-length model using the v0.24 dual-copy direct-address layout and its keyed BLAKE2 first-bucket hash. Bytes are process-visible file-length range beyond the committed frontier, not allocated filesystem blocks, storage-device writes, or latency."
+  },
+  "hypothesis_under_test": "removing eager full-generation ftruncate while keeping the v0.24 arithmetic dual-copy page addresses is sufficient to bound crash residue by a constant because a first lazy mutation materializes only one logical page",
+  "prediction": "if the hypothesis is false, first writes to high direct-address buckets will extend the process-visible file-length frontier by Theta(C) even though exactly one logical page is materialized; the eager and naive-lazy schemes will therefore differ only by constants",
+  "result": "falsified: one-page lazy materialization does not bound file-length residue under the existing arithmetic layout. For old capacity C and bucket_size=4, the last new bucket creates 4096(C-1) bytes beyond the committed frontier and the new stash creates 4096(C+1), while eager extension creates 4096(C+2). All remain Theta(C).",
+  "surviving_claim": "naive lazy allocation can reduce eager reservation but does not asymptotically bound the stale file-length range. Bounding residue requires changing address placement or adding a bounded mapping/segmentation layer; merely delaying writes is insufficient.",
+  "measurement_scope": "deterministic arithmetic file-length model using the v0.24 dual-copy direct-address layout and its keyed BLAKE2 first-bucket hash. Bytes are process-visible file-length range beyond the committed frontier, not allocated filesystem blocks, storage-device writes, or latency.",
+  "non_claims": [
+    "file-length range is not filesystem allocated-block usage",
+    "one logical page materialized is not one storage-device write",
+    "the experiment does not measure sparse-file allocation, filesystem journaling, latency, or power-loss hardware behavior",
+    "no extent-map or segmented-address replacement is established by v0.28"
+  ]
+}

@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.27
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.28
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -16,277 +16,126 @@ Architecture is treated as a surviving hypothesis, not as the goal. Negative res
 
 ## Current surviving production candidate
 
-The durable path currently contains:
+The production candidate still uses the normalized SQLite membership B-tree earned through v0.16. It provides revisable evidence/assertion semantics, valid- and knowledge-time queries, bounded context compilation, indexed candidate generation, dependency-aware invalidation/rebuild, transactional current heads, compositional facets, snapshot-consistent reads, and machine-readable replay evidence.
 
-- canonical evidence and revisable assertions with lineage;
-- correction, supersession, and contested-state reconciliation;
-- valid-time and knowledge-time queries;
-- bounded context compilation;
-- selective materialization and multi-dimensional addressability;
-- deterministic non-oracle query planning over oracle assertions;
-- scalable indexed candidate generation and incremental index maintenance;
-- dependency-aware invalidation/reconstruction/retirement;
-- explicit derived lifecycle states (`fresh`, `invalid`, `rebuilding`);
-- SQLite WAL persistence with real `SIGKILL` recovery tests;
-- durable ordered logical intents and optimistic canonical versions;
-- snapshot-consistent derived reads;
-- promotion-time topology revalidation;
-- explicit missing-output obligations;
-- subject-wide profile semantic identity;
-- transactional `(subject,predicate)` current heads;
-- compositional predicate facets;
-- normalized indexed `(subject,predicate)` membership;
-- constant-size subject profile descriptors;
-- facet-local stale-read protection;
-- machine-readable evidence anchors with executable replay verifiers.
+The v0.18–v0.28 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, and an explicit volatile/durable persistence-ordering model.
 
-The v0.18–v0.27 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.27 strengthens the experimental hybrid's recovery story with an explicit volatile-versus-durable persistence-ordering model: derivation-based cleanup restart-converges when unsynced truncation is lost, while a durable cleanup-complete marker persisted before fixed-file `fsync` is rejected by counterexample. Hardware power-loss behavior, filesystem/device cleanup cost, `Theta(C)` stale-generation residue, and production integration remain open.
+v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier.
 
 ## Deliberate non-claims
 
 Current evidence does **not** establish:
 
-- production entity linking, semantic embeddings, or extraction accuracy;
-- distributed/replicated consistency;
-- hardware power-loss guarantees from the abstract v0.27 persistence model;
-- torn-sector, drive write-cache, or filesystem-journaling behavior;
-- arbitrary physical multi-writer execution;
-- production latency or dollar cost;
-- cold/archive recovery;
-- arbitrary ontology migration;
+- production entity linking, embedding quality, or extraction accuracy;
+- distributed/replicated consistency or arbitrary multi-writer correctness;
+- hardware power-loss guarantees from the abstract persistence model;
+- torn-sector, drive-cache, or filesystem-journal behavior;
+- production latency, throughput, or dollar cost;
 - constant work for arbitrarily large live subject fan-out or facet values;
-- direct OS/device page-read locality independent of global memory;
-- constant comparison-tree depth for the current production membership indexes;
-- universally constant lookup under arbitrary collisions;
-- a production-ready physically direct-addressed hybrid replacement for the membership B-tree;
-- equivalence between `os.pread`/`os.pwrite` invocation counts and filesystem/device I/O;
-- constant exceptional lookup: exact overflow still inherits B-tree depth;
-- bounded stale-tail reclamation volume under eager generation allocation;
-- bounded filesystem allocated-block or device-level reclamation from one `ftruncate` call;
-- SQLite WAL-frame, filesystem, fsync, or device write-amplification bounds for the complete hybrid;
+- constant comparison-tree depth for the current production membership B-tree;
+- universal constant lookup under arbitrary collisions;
+- equivalence between user-space `pread`/`pwrite` calls and device I/O;
+- constant exceptional lookup: exact overflow still inherits comparison-tree depth;
+- bounded filesystem allocated-block reclamation from file-length truncation;
+- bounded stale-generation residue under the current direct-address layout;
+- a production-ready extent-map or segmented-address replacement;
 - a strong agentic-RAG superiority result.
 
 ## Milestone ledger
 
 | Version | Falsification target | Main surviving result |
 |---|---|---|
-| v0.1 | Is persistent state semantically necessary? | No under oracle retrieval; persistent state only earned a possible efficiency role. |
-| v0.2 | Does materialized state earn write complexity? | Selective materialization reduces repeated current-state reconstruction when read savings justify maintenance. |
-| v0.3 | Is one similarity channel sufficient? | No. Identity/time are independent address dimensions; adaptive coverage prevents premature closure. |
-| v0.4 | Does addressability survive removal of the oracle plan? | Controlled-language planner matched resolvable oracle cases and abstained on irreducible ambiguity. |
-| v0.5 | Can query resolution avoid O(N) subject scans? | Yes after fragment addressability; indexed resolution stayed accurate through 50k entities. |
-| v0.6 | Can address indexes be maintained locally? | Fixed-local mutations stayed roughly constant while rebuild work grew with total memory. |
-| v0.7 | Can multi-layer invalidation/rebuild remain local? | Yes for tested DAGs after hidden whole-graph invalid discovery was removed. |
-| v0.8 | Can interrupted maintenance recover without stale reads? | Initial phase handling failed; idempotent redo repaired the protocol. |
+| v0.1 | Is persistent state semantically necessary? | No under oracle retrieval; persistence only earned a possible efficiency role. |
+| v0.2 | Does materialized state earn write complexity? | Selective materialization can reduce repeated reconstruction when read savings justify maintenance. |
+| v0.3 | Is one similarity channel sufficient? | No; identity and time are independent address dimensions. |
+| v0.4 | Does addressability survive removal of the oracle plan? | Controlled-language planning matched resolvable oracle cases and abstained on irreducible ambiguity. |
+| v0.5 | Can query resolution avoid O(N) subject scans? | Indexed fragment addressability stayed accurate through 50k entities. |
+| v0.6 | Can indexes be maintained locally? | Fixed-local mutations stayed roughly constant while full rebuild grew with memory. |
+| v0.7 | Can multi-layer invalidation/rebuild remain local? | Yes for tested DAGs after hidden whole-graph discovery was removed. |
+| v0.8 | Can interrupted maintenance recover without stale reads? | Initial phase handling failed; idempotent redo repaired it. |
 | v0.9 | Do crash invariants survive real process death? | SQLite WAL + `synchronous=FULL` passed 33 real `SIGKILL` cases. |
 | v0.10 | Do multiple durable intents preserve conflict/recovery semantics? | Yes after a snapshot race was found and fixed. |
-| v0.11 | Can admission-time impact metadata become stale? | Yes. Promotion-time topology revalidation closes the demonstrated leak. |
-| v0.12 | Can canonical growth require absent derived outputs? | Yes. Explicit missing-output obligations restore completeness. |
+| v0.11 | Can admission-time impact metadata become stale? | Yes; promotion-time topology revalidation closes the demonstrated leak. |
+| v0.12 | Can canonical growth require absent derived outputs? | Yes; explicit missing-output obligations restore completeness. |
 | v0.13 | Can subject-only profiles remain correct across predicate change? | Subject-wide profile semantics restore exact parity. |
-| v0.14 | Can current reconstruction avoid historical-depth scans? | Transactional current heads remove H-dependence while preserving true P-dependence. |
+| v0.14 | Can current reconstruction avoid historical-depth scans? | Transactional current heads remove H-dependence while preserving real P-dependence. |
 | v0.15 | Can selective maintenance scale with K instead of P? | Yes in logical facet work; exposed an O(P) serialized manifest. |
-| v0.16 | Can the serialized manifest be removed? | Yes: normalized membership plus a 40-byte descriptor keeps measured selective returned work K-local, but B-tree depth still grows with N. |
-| v0.17 | Can fixed B-tree sharding make lookup depth constant? | No. Fixed sharding changes thresholds, not `Theta(log_B N)`. |
-| v0.18 | Does conventional hashing solve lookup locality without new spikes? | No. Expected constant lookup coexists with `Theta(N)` stop-the-world resize spikes. |
+| v0.16 | Can the serialized manifest be removed? | Normalized membership keeps measured selective returned work K-local; B-tree depth still grows with N. |
+| v0.17 | Can fixed B-tree sharding make lookup depth constant? | No; fixed sharding changes thresholds, not `Theta(log_B N)`. |
+| v0.18 | Does conventional hashing solve locality without new spikes? | No; expected constant lookup coexists with `Theta(N)` stop-the-world resize spikes. |
 | v0.19 | Can incremental migration bound resize work per mutation? | Source migration is bounded at 8 slots/rows, but linear placement retains an unbounded tail. |
-| v0.20 | Can placement itself have a finite work cap? | Yes with bounded bucketized cuckoo placement, but concentrated capacity is finite: 16 keys. |
-| v0.21 | Can finite bounded domains provide an escape path? | Yes: capacity `16D`, mutation cap `200D`, miss pages `3D`; fixed D still has finite admission and proportional space. |
-| v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes in the tested model: ordinary primary hits remain isolated; overflow guarantees admission but honestly inherits logarithmic B-tree depth. |
-| v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remained unproven. |
-| v0.24 | Can the persistent primary remove comparison-tree traversal without losing crash atomicity? | Yes in the tested fixed-page model: 9/9 crash cases were exact pre/post images, arithmetic lookup remained index-free through 16,384 rows, and single-generation misses used 8 user-space `pread` calls; exact overflow and physical reclamation remained open. |
-| v0.25 | Can fixed-page primary + exact overflow share a crash-atomic visibility protocol with safe cleanup? | Yes in the tested process-crash envelope: 6/6 cross-store crash cases were exact pre/post images, startup cleanup prevented future-row resurrection, and ordinary hits stayed isolated. The stale uncommitted file-length suffix is `4096(C+2)=Theta(C)`. |
-| v0.26 | Does cleanup itself restart-converge when killed at its internal boundaries? | Yes in the tested single-writer process-SIGKILL model: 8/8 interrupted-recovery cases preserved committed state, converged to zero residue with zero application redo, and did not resurrect abandoned future rows. |
-| v0.27 | Does the cleanup protocol survive a model that distinguishes volatile file state from durable state? | Yes for derivation-based cleanup in the nine-case abstract persistence model; an unsynced truncate is lost and repaired on restart. A durable cleanup marker written before file `fsync` is falsified by a stranded-tail counterexample. |
+| v0.20 | Can placement itself have a finite work cap? | Yes with bounded cuckoo placement, but concentrated capacity is finite at 16 keys. |
+| v0.21 | Can finite bounded domains provide an escape path? | Capacity `16D`, mutation cap `200D`, miss pages `3D`; fixed D still has finite admission. |
+| v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes; ordinary primary hits remain isolated while overflow guarantees admission with logarithmic exceptional cost. |
+| v0.23 | Can bounded migration + overflow survive real process death atomically? | 15/15 crash cases were exact pre/post images with zero application redo. |
+| v0.24 | Can persistent primary lookup remove comparison-tree traversal? | 9/9 crash cases passed; arithmetic addressing stayed index-free, but stale physical tail appeared. |
+| v0.25 | Can fixed-page primary + exact overflow share one visibility protocol? | 6/6 cross-store crash cases passed; startup cleanup prevented future-row resurrection. |
+| v0.26 | Does cleanup itself restart-converge when killed? | 8/8 interrupted-recovery cases preserved state and converged with zero logical redo. |
+| v0.27 | Does cleanup survive explicit volatile/durable ordering? | Yes for derivation-based cleanup; a premature durable cleanup marker is falsified by a stranded-tail counterexample. |
+| v0.28 | Does naive lazy allocation bound stale-generation residue? | No; one lazy page write can still create `Theta(C)` file-length residue because the direct address itself scales with capacity. |
 
-Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md`, `*_results.json`, and milestone evidence anchors.
+Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_evidence.json`, and executable `verify_*_results.py` gates.
 
-## Selected validated measurements
+## Current storage-layer evidence
 
-### v0.16 normalized membership
+### v0.24 — fixed-page primary
 
-At fixed `K=1,H=8,N=128`, the subject descriptor stays **40 bytes** and selective SQL payload stays **270 bytes** across `P=1..64`; full profile payload grows with the real output. Predicate topology deltas avoid rewriting a P-sized manifest.
-
-The remaining caveat is physical lookup depth: the membership B-tree height grows with global N, so one SQLite VM `Seek` is not proof of constant physical locality.
-
-### v0.17 comparison-tree page locality
-
-With 4096-byte pages:
-
-| Membership rows `N` | Global height | 64-way max shard height |
-|---:|---:|---:|
-| 1,000 | 2 | 1 |
-| 10,000 | 2 | 2 |
-| 50,000 | 3 | 2 |
-| 250,000 | 3 | 2 |
-| 1,000,000 | 3 | 3 |
-
-For fixed finite shard count `S`:
-
-\[
-\boxed{AddressLookupPages=\Theta(\log_B(N/S))=\Theta(\log_B N)}
-\]
-
-### v0.18–v0.19 resize locality
-
-v0.18 stop-the-world resize produces largest single migrations of:
-
-`512, 2,048, 8,192, 32,768, 131,072` rows
-
-at `N={1k,4k,16k,64k,256k}`.
-
-v0.19 limits source migration to **8 source slots / 8 copied rows per insertion**, but total mutation slot-work maxima still grow `26,26,35,39,50` because destination placement uses linear probing.
-
-### v0.20 bounded placement
-
-The fixed two-choice bucketized cuckoo candidate uses 4 slots per bucket, 32 relocation attempts, and an 8-entry stash. Ordinary growth through 256k entries has zero failures and observed mutation maxima `17,17,22,27,30`. The modeled insertion cap is **200 slot operations**.
-
-Concentrated collision stress admits 16 keys and rejects the 17th at the explicit bound:
-
-\[
-\boxed{BoundedPlacementWork \neq GuaranteedInsertionAvailability}
-\]
-
-### v0.21 bounded finite escalation
-
-For `D={1,2,4,8}` concentrated domains:
-
-| D | Capacity | First failure | Mutation cap | Missing lookup pages | Reserved space |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 16 | 17 | 200 | 3 | 1x |
-| 2 | 32 | 33 | 400 | 6 | 2x |
-| 4 | 64 | 65 | 800 | 12 | 4x |
-| 8 | 128 | 129 | 1,600 | 24 | 8x |
-
-Finite escalation is coherent, but unlimited escalation would simply move non-locality into mutation work, lookup fan-out, and reserved capacity.
-
-### v0.22 explicit rare overflow
-
-v0.22 keeps **one bounded v0.20 primary domain** and sends only exhausted placements to an exact-key SQLite `WITHOUT ROWID` B-tree overflow.
-
-Ordinary `N={1k,4k,16k,64k,256k}` remains entirely on the primary path. After deliberately saturating the primary's concentrated capacity, exceptional lookup follows:
-
-\[
-\boxed{ExceptionalLookupPages(O)=3+Height_{BTree}(O)}
-\]
-
-The defensible result is **common/exceptional-path separation**, not universal constant lookup. See `RESULTS_V0.22.md`, `rare_overflow_results.json`, and `verify_rare_overflow_results.py`.
-
-### v0.23 durable hybrid admission
-
-The persistent candidate commits one logical admission, one bounded source-migration step, overflow routing, and generation metadata in a single SQLite WAL transaction with `synchronous=FULL`.
-
-The fixed real-process crash matrix covers five scenarios × three failpoints = **15 `SIGKILL` cases**. All 15 produced exactly the deterministic pre-transaction or post-transaction logical snapshot required by the commit boundary. Every case preserved membership audits and pre-existing keys, and two consecutive recovery passes required **zero application redo or repair**.
-
-Ordinary persistent growth:
-
-| Membership rows | Interval max primary work | Max source slots | Max rows moved | Overflow rows | Successful overflow checks | Metadata rows |
-|---:|---:|---:|---:|---:|---:|---:|
-| 256 | 27 | 8 | 8 | 0 | 0 | 1 |
-| 1,024 | 30 | 8 | 8 | 0 | 0 | 1 |
-| 4,096 | 34 | 8 | 8 | 0 | 0 | 1 |
-
-Six migrations started and all six completed. The conservative derived primary-work bound is **1808 modeled operations**; the observed ordinary maximum was **34**.
-
-Persistent exceptional overflow still exposes B-tree geometry:
-
-| Overflow rows `O` | B-tree height | Overflow-hit modeled pages | Missing-key modeled pages |
-|---:|---:|---:|---:|
-| 1 | 1 | 4 | 4 |
-| 16 | 1 | 4 | 4 |
-| 64 | 1 | 4 | 4 |
-| 256 | 2 | 5 | 5 |
-| 1,024 | 2 | 5 | 5 |
-
-The durable claim is transactional and logical. Primary bucket/stash page probes are model pages; the backing SQLite primary tables are themselves comparison B-trees. SQL row-write counts are not WAL frames, filesystem writes, fsyncs, or device writes. See `RESULTS_V0.23.md`, `durable_hybrid_evidence.json`, and `verify_durable_hybrid_results.py`.
-
-### v0.24 fixed-page primary locality
-
-v0.24 moves the experimental primary below SQLite comparison indexes. Every logical primary page has two CRC-protected 4096-byte physical copies, and two fixed superblocks carry the committed epoch. The primary address is computed directly:
+The experimental primary uses two CRC-protected physical copies per logical page and two fixed superblocks. Its address is:
 
 \[
 \boxed{ByteOffset=4096(2+2p+c)}
 \]
 
-for logical page `p` and copy `c in {0,1}`. `primary_index_structure` is explicitly `none`.
+All 9/9 real `SIGKILL` cases matched the required pre/post committed image. Single-generation missing lookup used 8 user-space `pread` calls; active two-generation missing lookup used 14. These are invocation counts, not device-I/O bounds.
 
-All **9/9 real `SIGKILL` cases** across ordinary insertion, migration start, and migration progress matched the exact deterministic pre/post logical image required by the committed superblock epoch. Recovery required zero logical redo.
+### v0.25–v0.27 — cleanup and persistence ordering
 
-Ordinary growth:
+Cross-store overflow rows are visibility-gated by the fixed-page committed epoch. Recovery deletes hidden future overflow rows and truncates file length back to the committed `next_page_id` frontier.
 
-| Membership rows | Max source slots | Max rows moved | Max logical pages written | Max placement work | Successful lookup max `pread` calls | Missing lookup `pread` calls |
-|---:|---:|---:|---:|---:|---:|---:|
-| 256 | 8 | 7 | 7 | 19 | 6 | 8 |
-| 1,024 | 8 | 8 | 9 | 26 | 6 | 8 |
-| 4,096 | 8 | 8 | 9 | 39 | 6 | 8 |
-| 16,384 | 8 | 8 | 12 | 39 | 6 | 8 |
-
-Eight migrations started and all eight completed. During active two-generation migration, successful lookup used at most **12** user-space `os.pread` calls and a missing lookup used **14**.
-
-The crash matrix also exposed an important non-equivalence: uncommitted `migration_start` crashes retained **139,264 bytes of unreachable file tail** even though logical recovery was exact. Therefore zero logical redo does not imply zero cleanup. `os.pread` invocation counts likewise do not prove storage-device I/O locality. See `RESULTS_V0.24.md`, `fixed_page_primary_evidence.json`, and `verify_fixed_page_primary_results.py`.
-
-### v0.25 cross-store fixed-page hybrid
-
-v0.25 restores persistent exact exceptional overflow to the fixed-page primary without placing overflow on the successful common path. The fixed-page superblock epoch is the visibility coordinator. An exceptional row is committed to SQLite at future epoch `E+1`; it becomes logically visible only after the fixed-page coordinator commits `E+1`.
-
-All **6/6 real cross-store `SIGKILL` cases** matched the required exact pre/post logical image before and after cleanup. A committed-but-hidden future row remained absent, was deleted through the `overflow_epoch` index, and could not resurrect when a later admission advanced the epoch.
-
-Common-path growth:
-
-| Membership rows | Max source slots | Max rows moved | Successful lookup max fixed-file `pread`s | Successful overflow checks |
-|---:|---:|---:|---:|---:|
-| 256 | 8 | 7 | 6 | 0 |
-| 1,024 | 8 | 8 | 6 | 0 |
-| 4,096 | 8 | 8 | 6 | 0 |
-
-Exceptional overflow remains explicit:
-
-| Overflow rows | B-tree height | Primary miss fixed-file `pread`s | Extra coordinator `pread`s |
-|---:|---:|---:|---:|
-| 1 | 1 | 8 | 2 |
-| 16 | 1 | 8 | 2 |
-| 64 | 1 | 8 | 2 |
-| 256 | 2 | 8 | 2 |
-| 1,024 | 2 | 8 | 2 |
-
-The stale migration-start suffix obeyed:
+The eager migration-start stale range is:
 
 \[
-\boxed{StaleTailBytes(C)=4096(C+2)=\Theta(C)}
+\boxed{EagerResidue(C)=4096(C+2)=\Theta(C)}
 \]
 
-with measured ranges `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for initial capacities `C={32,128,512,2048}`. Each completed cleanup used one `ftruncate` and one fixed-file `fsync`, but that constant syscall count is **not** a device-work claim. Filesystem allocated-block reclamation was not measured. See `RESULTS_V0.25.md`, `cross_store_hybrid_evidence.json`, and `verify_cross_store_hybrid_results.py`.
-
-### v0.26 interrupted recovery
-
-v0.26 kills the cleanup procedure itself at the SQLite DELETE and fixed-tail truncate durability boundaries. The fixed matrix contains **8 real `SIGKILL` cases** over natural future-row residue, natural stale-tail residue, and a disclosed combined-residue control.
-
-All 8 interrupted recoveries preserved the exact committed logical snapshot, retained pre-existing membership, converged to zero future rows and zero stale tail, and required **zero application logical redo**. A second completed recovery was a cleanup no-op in every case. Later coordinator-epoch advancement did not resurrect abandoned future rows.
-
-The process-crash observation that `ftruncate` remained visible after `SIGKILL` before explicit file `fsync` is intentionally not promoted to a power-loss claim. See `RESULTS_V0.26.md`, `recovery_interruption_evidence.json`, and `verify_recovery_interruption_results.py`.
-
-### v0.27 explicit persistence ordering
-
-v0.27 replaces that inference with an abstract storage-ordering model that separately tracks volatile and durable file-size frontiers:
+v0.26 shows completed cleanup restart-converges after real process `SIGKILL`. v0.27 then separates volatile and durable file-size state:
 
 \[
 \boxed{ftruncate:V\leftarrow new,\quad fsync:D\leftarrow V,\quad PowerLoss:V\leftarrow D}
 \]
 
-All **9/9** derived-recovery cases preserved exact committed logical state and restart-converged with zero application logical redo. The key distinction is now explicit:
+All 9/9 derivation-based power-loss-model cases converge. A cleanup marker committed after `ftruncate` but before file `fsync` is unsafe: the marker can survive while the truncation is lost.
 
-- unsynced truncate + power loss: durable stale tail returns to **139,264 bytes** in the base fixture;
-- synced truncate + power loss: durable stale tail remains **0**;
-- next derivation-based recovery re-observes the residue, truncates, syncs, and converges.
+### v0.28 — naive lazy allocation
 
-A negative control durably writes `tail_clean=true` after truncate but before file `fsync`. Modeled power loss retains the marker while restoring the **139,264-byte** durable tail; marker-based retry then does nothing. Therefore:
+v0.28 retains the exact v0.24 direct-address geometry but removes the assumption of eager full-generation extension. For old capacity `C` and four slots per bucket, the doubled generation has `C/2` bucket pages. First writing copy 0 of bucket `b` creates:
 
 \[
-\boxed{DurableCleanupMarker\not\Rightarrow DurableCleanup}
+LazyResidue(b)=(2b+1)\times4096
 \]
 
-unless the marker is ordered after the storage operation it certifies or is ignored in favor of re-derivation.
+bytes beyond the committed frontier even though exactly one logical page is materialized.
 
-The eager-generation residue remains `4096(C+2)=Theta(C)` with measured retry reclamation of `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for `C={32,128,512,2048}`. See `RESULTS_V0.27.md`, `persistence_fault_evidence.json`, and `verify_persistence_fault_results.py`.
+| Old `C` | Eager bytes | Lazy last-bucket bytes | Lazy stash bytes | Sample p50 | Sample p95 | Sample max |
+|---:|---:|---:|---:|---:|---:|---:|
+| 32 | 139,264 | 126,976 | 135,168 | 61,440 | 126,976 | 126,976 |
+| 128 | 532,480 | 520,192 | 528,384 | 258,048 | 495,616 | 520,192 |
+| 512 | 2,105,344 | 2,093,056 | 2,101,248 | 1,069,056 | 1,994,752 | 2,093,056 |
+| 2,048 | 8,396,800 | 8,384,512 | 8,392,704 | 4,206,592 | 7,958,528 | 8,384,512 |
+
+Therefore:
+
+\[
+\boxed{OneLazyPageWritten\not\Rightarrow BoundedFileLengthResidue}
+\]
+
+and, more generally:
+
+\[
+\boxed{LazyPhysicalMaterialization\neq BoundedAddressSpan}
+\]
+
+This is a file-length result only. It is not a filesystem allocated-block or device-write measurement.
 
 ## Reproducing the hardened path
 
@@ -308,6 +157,7 @@ python run_fixed_page_primary_experiment.py
 python run_cross_store_hybrid_experiment.py
 python run_recovery_interruption_experiment.py
 python run_persistence_fault_experiment.py
+python run_lazy_generation_allocation_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -329,9 +179,10 @@ python verify_fixed_page_primary_results.py
 python verify_cross_store_hybrid_results.py
 python verify_recovery_interruption_results.py
 python verify_persistence_fault_results.py
+python verify_lazy_generation_allocation_results.py
 ```
 
-CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
+CI runs this chain and uploads the milestone evidence ledgers as artifacts.
 
 ## Current architectural hypothesis
 
@@ -353,75 +204,27 @@ Question
   -> one-snapshot facet assembly
   -> bounded context compilation
 
-Canonical mutation
-  -> durable ordered intent
-  -> conflict validation
-  -> promotion-time topology revalidation
-  -> local invalidation / missing-output derivation
-  -> local reconstruction / current-head update
-  -> affected membership/facet repair
-  -> selective retirement
-  -> crash-safe completion
-
 Experimental membership alternative
-  -> fixed-page arithmetic-addressed bounded primary
+  -> bounded cuckoo primary + explicit exact overflow
   -> bounded incremental migration
-  -> dual-page copies + dual committed superblocks
-  -> persistent exact-key B-tree overflow
-  -> fixed-page epoch as cross-store visibility coordinator
-  -> indexed abandoned-future-row cleanup
-  -> metadata-derived stale-tail truncation
-  -> cleanup residue re-derived on every restart
+  -> fixed-page arithmetic addresses + dual committed copies
+  -> cross-store visibility epoch
+  -> residue re-derived on restart
   -> explicit volatile/durable persistence-ordering controls
+  -> naive lazy generation allocation rejected for Theta(C) address span
 ```
 
-Seventeen distinctions are now central:
+## Next falsification target — bounded segment mapping
 
-> Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
-
-> Correct derived state requires freshness, completeness, and semantic-identity consistency.
-
-> Locality must be judged against the true semantic footprint, not lifetime database size.
-
-> Logical row counts can hide serialized fan-out.
-
-> One indexed VM `Seek` can hide growing B-tree page depth.
-
-> Fixed comparison-index sharding changes constants, not asymptotic depth.
-
-> Expected constant lookup does not imply bounded mutation if resize is global.
-
-> Bounded migration scheduling does not bound an unbounded placement primitive.
-
-> Bounded placement work does not imply guaranteed admission.
-
-> Finite bounded escalation raises admission only by proportional work/lookup/space.
-
-> Guaranteed admission can coexist with a bounded common path only by making exceptional cost explicit; exceptional lookup is not thereby constant.
-
-> Transactional crash atomicity does not imply physical direct-address locality; logical bucket pages and SQL row writes must not be confused with storage-engine or device I/O.
-
-> Arithmetic page addressing and bounded `os.pread` call counts remove comparison-index traversal from the tested implementation, but they do not prove bounded device I/O.
-
-> Zero logical recovery work does not imply zero cleanup: an uncommitted generation can leave an unreachable suffix after crash.
-
-> Cross-store epoch gating is insufficient by itself: a durable hidden future row must be removed before a later coordinator advance can make it accidentally visible.
-
-> Restart convergence under process death does not establish hardware power-loss ordering.
-
-> A durable cleanup-complete marker is unsafe if it can become durable before the storage operation it certifies; re-derivation avoids that ordering dependency in the tested model.
-
-## Next falsification target — bounded crash residue
-
-v0.27 preserves cleanup correctness under the explicit persistence-ordering model, but eager migration-start allocation can still leave a stale file-length range proportional to generation capacity.
+v0.28 shows that delaying physical materialization cannot solve the stale-range problem while logical bucket identity maps directly to a capacity-scaled physical offset.
 
 The next question is:
 
 \[
 \boxed{
-Can generation space be allocated incrementally so crash residue and reclamation volume are bounded per mutation,
-without destroying arithmetic lookup locality, bounded migration work, or the crash/persistence contracts already earned?
+Can a bounded segment/extent mapping decouple logical bucket identity from physical file offset,
+so crash residue is bounded by fixed segment size without reintroducing growing lookup depth or metadata work?
 }
 \]
 
-A v0.28 experiment should compare eager generation extension against incremental/lazy page allocation, measure the maximum unreachable durable/volatile suffix created by one logical mutation, preserve direct arithmetic page addressing, and retain the v0.27 negative persistence-ordering controls.
+A v0.29 experiment should fix a small segment size and explicitly measure descriptor reads, per-mutation descriptor writes, segment allocation residue, migration work, restart recovery, and descriptor growth. If locating a segment requires an unbounded table scan or comparison tree, or if common-path descriptor fan-out grows with generation size, the non-locality has merely moved into the mapping layer and the candidate should be rejected.
