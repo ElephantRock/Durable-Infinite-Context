@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from simulator.cross_store_hybrid import run_crash_case
+from simulator.cross_store_hybrid import (
+    run_crash_case,
+    run_future_row_resurrection_control,
+)
 from storage.cross_store_hybrid import CrossStoreHybridStore
 
 
@@ -31,10 +34,14 @@ class CrossStoreHybridTests(unittest.TestCase):
         self.assertEqual(
             committed_future.recovery_one["deleted_future_overflow_rows"], 1
         )
+        self.assertTrue(committed_future.recovery_one["cleanup_epoch_index_used"])
+        self.assertTrue(committed_future.exact_snapshot_match_after_recovery)
+
         committed = run_crash_case("overflow_admission", "committed")
         self.assertTrue(committed.expected_committed)
         self.assertTrue(committed.target_visible_after_crash)
         self.assertEqual(committed.recovery_one["deleted_future_overflow_rows"], 0)
+        self.assertTrue(committed.audit_valid_after_recovery)
 
     def test_migration_start_stale_tail_is_reclaimed_without_logical_redo(self) -> None:
         row = run_crash_case("migration_start", "primary_data_synced")
@@ -44,8 +51,17 @@ class CrossStoreHybridTests(unittest.TestCase):
             row.recovery_one["reclaimed_tail_bytes"], row.pre_recovery_tail_bytes
         )
         self.assertEqual(row.recovery_one["logical_redo"], 0)
-        self.assertTrue(row.recovery_one["logical_snapshot_unchanged"])
+        self.assertTrue(row.exact_snapshot_match_after_recovery)
+        self.assertTrue(row.audit_valid_after_recovery)
         self.assertEqual(row.recovery_two["reclaimed_tail_bytes"], 0)
+
+    def test_abandoned_future_row_cannot_resurrect_on_later_epoch(self) -> None:
+        row = run_future_row_resurrection_control()
+        self.assertEqual(row["future_rows_before_startup_recovery"], 1)
+        self.assertEqual(row["startup_deleted_future_rows"], 1)
+        self.assertFalse(row["abandoned_key_visible_after_next_epoch"])
+        self.assertTrue(row["replacement_key_visible"])
+        self.assertTrue(row["audit_valid"])
 
 
 if __name__ == "__main__":
