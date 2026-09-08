@@ -1,0 +1,56 @@
+{
+  "experiment": "v0.24_fixed_page_primary",
+  "initial_successful_ci": {
+    "run_number": 228,
+    "run_id": 34185415846,
+    "head_sha": "f0758f5123ad506a12aec9956842b30148e86eab",
+    "artifact_id": 10040697215,
+    "artifact_name": "v0.24-fixed-page-primary-results",
+    "artifact_sha256": "97710fc5df92cd44326d4e8f19a3ff0df05000947f76cd4d2235958a695e7a8c",
+    "fixed_page_primary_results_json_sha256": "acb136b0da7dac9665bdc861492ab5366363d86404536a9211d0418057183812"
+  },
+  "fixed_crash_matrix": {
+    "scenarios": ["ordinary_insert", "migration_start", "migration_progress"],
+    "failpoints": ["pages_written", "data_synced", "committed"],
+    "cases": 9,
+    "exact_pre_or_post_snapshots": 9,
+    "valid_membership_audits": 9,
+    "idempotent_zero_redo_recovery": 9
+  },
+  "common_envelope": {
+    "membership_rows": [256, 1024, 4096, 16384],
+    "global_max_source_slots_scanned": 8,
+    "global_max_rows_moved": 8,
+    "global_max_logical_pages_written": 12,
+    "global_max_placement_work": 39,
+    "migration_starts": 8,
+    "migration_completions": 8,
+    "successful_lookup_total_pread_max": 6,
+    "missing_total_preads": 8,
+    "page_size": 4096,
+    "superblock_copies": 2,
+    "logical_page_copies": 2,
+    "primary_index_structure": "none",
+    "byte_offset": "PAGE_SIZE * (2 + 2*logical_page_id + copy_slot)"
+  },
+  "active_migration_lookup_envelope": {
+    "source_slots_scanned_on_start": 8,
+    "rows_moved_on_start": 3,
+    "successful_lookup_total_pread_max": 12,
+    "successful_lookup_generations_max": 2,
+    "missing_total_preads": 14
+  },
+  "collision_rejection": {
+    "admitted_keys": 16,
+    "first_rejected_ordinal": 17,
+    "snapshot_unchanged": true
+  },
+  "surviving_claim": "In the tested single-writer local fixed-page model, arithmetic primary addressing removes comparison-index traversal from the primary lookup path while preserving process-crash atomicity under the tested dual-page-copy plus dual-superblock fsync protocol. Single-generation lookup used at most eight user-space os.pread calls, active two-generation missing lookup used fourteen, and source migration remained bounded at eight slots/rows.",
+  "non_claims": [
+    "os.pread and os.pwrite invocation counts are not OS, filesystem, or storage-device I/O counts and may be served from cache",
+    "the tested SIGKILL protocol does not establish arbitrary hardware power-loss torn-write behavior",
+    "exceptional exact-key overflow is not integrated into the fixed-page commit protocol yet",
+    "sparse-file logical size and allocated-byte measurements are not a production space-amplification guarantee",
+    "no multi-writer, distributed-consistency, production-latency, or device-write-amplification claim"
+  ]
+}
