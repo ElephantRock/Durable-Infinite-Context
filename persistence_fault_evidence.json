@@ -1,0 +1,45 @@
+{
+  "experiment": "v0.27_persistence_fault_model",
+  "initial_successful_ci": {
+    "run_number": 255,
+    "run_id": 34244587717,
+    "head_sha": "012265f69399b99370a1f9229e1c86687bd1f02e",
+    "artifact_id": 10064080341,
+    "artifact_name": "v0.27-persistence-fault-results",
+    "artifact_sha256": "a33559cdf1b37a5a3ac2d9a4bb3467ad376d8ddfd63ca6fb1cfedb37b8e93202",
+    "persistence_fault_results_json_sha256": "4d55252a4d2358d1c815a74b35cfcec4fd862f39be01c7d38cd5a7b66ab6c234"
+  },
+  "fixed_matrix": {
+    "cases": 9,
+    "residue_classes": ["future_overflow", "fixed_tail", "combined"],
+    "failpoints": [
+      "future_delete_uncommitted",
+      "future_delete_committed",
+      "after_future_cleanup",
+      "tail_truncated",
+      "tail_synced"
+    ]
+  },
+  "observed": {
+    "exact_logical_snapshot_after_power_loss_cases": 9,
+    "restart_converged_cases": 9,
+    "second_retry_noop_cases": 9,
+    "logical_redo_on_all_retries": 0,
+    "future_rows_after_uncommitted_delete_power_loss": 1,
+    "future_rows_after_committed_delete_power_loss": 0,
+    "durable_tail_after_unsynced_truncate_power_loss_bytes": 139264,
+    "durable_tail_after_synced_truncate_power_loss_bytes": 0,
+    "premature_marker_protocol_converged": false,
+    "premature_marker_stranded_tail_bytes": 139264,
+    "derived_protocol_repairs_marker_residue": true,
+    "reclamation_scaling_bytes": [139264, 532480, 2105344, 8396800]
+  },
+  "surviving_claim": "In the deterministic abstract persistence model, re-deriving cleanup residue from durable state on every restart is restart-convergent across the fixed nine-case power-loss matrix. Unsynced file-size truncation is lost, synced truncation survives, and a cleanup-complete marker durably committed before the file fsync is unsafe because it can strand stale tail after power loss.",
+  "negative_control": "A durable tail-clean marker written after ftruncate but before fixed-file fsync survives modeled power loss while the file length reverts to the old durable frontier. Trusting that marker suppresses repair and strands 139264 bytes until residue is re-derived.",
+  "non_claims": [
+    "this is an abstract persistence-ordering model, not a hardware power-loss test",
+    "torn sectors, drive write caches, filesystem journaling, and SQLite WAL internals are not modeled",
+    "filesystem allocated-block reclamation and device write amplification are not measured",
+    "multi-writer execution, distributed consistency, production latency, throughput, and cost are not established"
+  ]
+}
