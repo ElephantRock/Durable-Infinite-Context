@@ -1,0 +1,45 @@
+{
+  "experiment": "v0.26_recovery_interruption",
+  "initial_successful_ci": {
+    "run_number": 248,
+    "run_id": 34232646662,
+    "head_sha": "eb06b1388577ee285e64a449ee199a6d13e3a49b",
+    "artifact_id": 10059119712,
+    "artifact_name": "v0.26-recovery-interruption-results",
+    "artifact_sha256": "978e2954fd73cc982922eb895e19f7b7e976a93141b4841a66bc9f92089672b3",
+    "recovery_interruption_results_json_sha256": "01bf1acc4593bd3573d3df4799de072760c38e6c163eb7fddae68880c7fbc89f"
+  },
+  "fixed_matrix": {
+    "cases": 8,
+    "natural_cases": 4,
+    "synthetic_combined_cases": 4,
+    "failpoints": [
+      "future_delete_uncommitted",
+      "future_delete_committed",
+      "tail_truncated",
+      "tail_synced"
+    ]
+  },
+  "observed": {
+    "exact_committed_snapshot_after_interrupt_cases": 8,
+    "converged_to_exact_snapshot_cases": 8,
+    "final_valid_audit_cases": 8,
+    "final_zero_future_rows_cases": 8,
+    "final_zero_tail_cases": 8,
+    "second_retry_cleanup_noop_cases": 8,
+    "future_delete_uncommitted_rows_after_interrupt": 1,
+    "future_delete_committed_rows_after_interrupt": 0,
+    "natural_stale_tail_bytes_before_cleanup": 139264,
+    "tail_bytes_after_sigkill_at_tail_truncated": 0,
+    "tail_bytes_after_sigkill_at_tail_synced": 0,
+    "logical_redo_on_all_retries": 0,
+    "abandoned_future_row_resurrection_cases": 0
+  },
+  "surviving_claim": "In the tested single-writer process-SIGKILL model, v0.25 future-row deletion and fixed-tail truncation are restart-convergent at the exercised cleanup boundaries. Interrupted cleanup preserves the exact committed logical snapshot; repeated restart converges to zero hidden future rows and zero stale file-length tail with zero application logical redo; abandoned future rows do not resurrect after a later epoch advance.",
+  "non_claims": [
+    "a file-length truncate observed after process SIGKILL before explicit fsync is not a hardware power-loss durability guarantee",
+    "SQLite internal WAL-frame and fsync behavior is not measured",
+    "filesystem allocated-block reclamation and storage-device cleanup work are not measured",
+    "multi-writer recovery, distributed consistency, production latency, throughput, and cost are not established"
+  ]
+}
