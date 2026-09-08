@@ -51,9 +51,9 @@ class CrossStoreRecoveryTrace:
     reclaimed_tail_bytes: int
     truncate_calls: int
     fixed_file_fsyncs: int
+    cleanup_sqlite_commits: int
+    cleanup_epoch_index_used: bool
     logical_redo: int
-    logical_snapshot_unchanged: bool
-    audit_valid: bool
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -66,13 +66,18 @@ class CrossStoreHybridStore:
     are durable SQLite rows tagged with the epoch that would make them visible. For an
     exceptional admission, SQLite commits the future-epoch row first. Only then does the
     fixed-page superblock advance to that epoch. A crash between those commits leaves a
-    durable but *logically invisible* future row, which recovery deletes before the next
-    mutation. Ordinary primary hits return before opening/querying overflow.
+    durable but *logically invisible* future row, which startup recovery deletes before
+    the next mutation. Ordinary primary hits return before opening/querying overflow.
 
     The committed primary metadata also defines a safe truncation frontier:
     ``(2 + 2*next_page_id) * PAGE_SIZE``. Page ids are allocated monotonically, so bytes
     beyond that frontier after a pre-commit crash belong only to uncommitted allocation.
     Recovery may therefore truncate that stale tail without scanning the live primary.
+
+    Recovery is intentionally metadata/index local: it does not build a logical snapshot
+    or audit all membership. Full snapshots/audits belong to the experiment oracle, not
+    the recovery mechanism. One in-process flag ensures startup recovery runs at most once
+    before normal mutations; a new process starts unrecovered.
 
     This is a single-writer process-crash experiment. SQLite commits/fsync behavior is
     delegated to SQLite WAL + synchronous=FULL and is not counted as device I/O here.
@@ -82,6 +87,7 @@ class CrossStoreHybridStore:
         self.primary = FixedPagePrimaryStore(primary_path)
         self.primary_path = Path(primary_path)
         self.overflow_path = Path(overflow_path)
+        self._recovered = False
 
     def initialize(self, **primary_kwargs: Any) -> None:
         self.primary.initialize(**primary_kwargs)
@@ -94,9 +100,11 @@ class CrossStoreHybridStore:
             conn.execute(
                 "CREATE TABLE overflow(key TEXT PRIMARY KEY, epoch INTEGER NOT NULL) WITHOUT ROWID"
             )
+            conn.execute("CREATE INDEX overflow_epoch ON overflow(epoch)")
             conn.commit()
         finally:
             conn.close()
+        self._recovered = True
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.overflow_path)
@@ -116,13 +124,6 @@ class CrossStoreHybridStore:
     def _reachable_bytes(meta: dict[str, Any]) -> int:
         return (2 + 2 * int(meta["next_page_id"])) * PAGE_SIZE
 
-    def _visible_overflow_rows(self, conn: sqlite3.Connection, epoch: int) -> int:
-        return int(
-            conn.execute(
-                "SELECT COUNT(*) FROM overflow WHERE epoch<=?", (int(epoch),)
-            ).fetchone()[0]
-        )
-
     def overflow_uses_primary_key(self, conn: sqlite3.Connection | None = None) -> bool:
         own = conn is None
         if conn is None:
@@ -138,6 +139,20 @@ class CrossStoreHybridStore:
             if own:
                 conn.close()
 
+    def cleanup_uses_epoch_index(self, conn: sqlite3.Connection | None = None) -> bool:
+        own = conn is None
+        if conn is None:
+            conn = self._connect()
+        try:
+            rows = conn.execute(
+                "EXPLAIN QUERY PLAN SELECT key FROM overflow WHERE epoch>? LIMIT 1", (1,)
+            ).fetchall()
+            detail = " ".join(str(row[3]).lower() for row in rows)
+            return "overflow_epoch" in detail and "scan overflow" not in detail
+        finally:
+            if own:
+                conn.close()
+
     def _advance_superblock(self, expected_epoch: int, overflow_rows: int) -> int:
         fd = self.primary._open()
         try:
@@ -149,33 +164,31 @@ class CrossStoreHybridStore:
             new_epoch = int(expected_epoch) + 1
             next_meta = dict(meta)
             next_meta["hybrid_overflow_rows"] = int(overflow_rows)
-            self.primary._write_super(
-                fd, int(expected_epoch), new_epoch, next_meta
-            )
+            self.primary._write_super(fd, int(expected_epoch), new_epoch, next_meta)
             os.fsync(fd)
             return new_epoch
         finally:
             os.close(fd)
 
     def recover(self) -> CrossStoreRecoveryTrace:
-        before = self.logical_snapshot()
         epoch, meta = self._read_epoch_meta()
         conn = self._connect()
         try:
-            before_changes = conn.total_changes
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("DELETE FROM overflow WHERE epoch>?", (epoch,))
-            deleted = int(conn.total_changes - before_changes)
-            conn.commit()
-            visible = self._visible_overflow_rows(conn, epoch)
+            indexed = self.cleanup_uses_epoch_index(conn)
+            future_exists = conn.execute(
+                "SELECT 1 FROM overflow WHERE epoch>? LIMIT 1", (epoch,)
+            ).fetchone() is not None
+            deleted = 0
+            sqlite_commits = 0
+            if future_exists:
+                before_changes = conn.total_changes
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("DELETE FROM overflow WHERE epoch>?", (epoch,))
+                deleted = int(conn.total_changes - before_changes)
+                conn.commit()
+                sqlite_commits = 1
         finally:
             conn.close()
-
-        expected_visible = int(meta.get("hybrid_overflow_rows", 0))
-        if visible != expected_visible:
-            raise RuntimeError(
-                f"committed overflow metadata mismatch: meta={expected_visible}, rows={visible}"
-            )
 
         reachable = self._reachable_bytes(meta)
         actual = self.primary_path.stat().st_size
@@ -192,17 +205,16 @@ class CrossStoreHybridStore:
             finally:
                 os.close(fd)
 
-        after = self.logical_snapshot()
-        audit = self.audit()
+        self._recovered = True
         return CrossStoreRecoveryTrace(
             committed_epoch=epoch,
             deleted_future_overflow_rows=deleted,
             reclaimed_tail_bytes=reclaimed,
             truncate_calls=truncate_calls,
             fixed_file_fsyncs=fixed_fsyncs,
+            cleanup_sqlite_commits=sqlite_commits,
+            cleanup_epoch_index_used=indexed,
             logical_redo=0,
-            logical_snapshot_unchanged=before == after,
-            audit_valid=bool(audit["valid"]),
         )
 
     def insert(
@@ -212,16 +224,19 @@ class CrossStoreHybridStore:
         *,
         recovery_first: bool = True,
     ) -> CrossStoreInsertTrace:
-        cleanup = self.recover() if recovery_first else CrossStoreRecoveryTrace(
-            committed_epoch=self._read_epoch_meta()[0],
-            deleted_future_overflow_rows=0,
-            reclaimed_tail_bytes=0,
-            truncate_calls=0,
-            fixed_file_fsyncs=0,
-            logical_redo=0,
-            logical_snapshot_unchanged=True,
-            audit_valid=True,
-        )
+        if recovery_first and not self._recovered:
+            cleanup = self.recover()
+        else:
+            cleanup = CrossStoreRecoveryTrace(
+                committed_epoch=self._read_epoch_meta()[0],
+                deleted_future_overflow_rows=0,
+                reclaimed_tail_bytes=0,
+                truncate_calls=0,
+                fixed_file_fsyncs=0,
+                cleanup_sqlite_commits=0,
+                cleanup_epoch_index_used=True,
+                logical_redo=0,
+            )
 
         def primary_fail(stage: str) -> None:
             if failpoint is not None:
@@ -248,6 +263,7 @@ class CrossStoreHybridStore:
             pass
 
         epoch, meta = self._read_epoch_meta()
+        prior_overflow_rows = int(meta.get("hybrid_overflow_rows", 0))
         conn = self._connect()
         try:
             if conn.execute(
@@ -259,7 +275,7 @@ class CrossStoreHybridStore:
                     duplicate=True,
                     committed_epoch=epoch,
                     primary_trace=None,
-                    overflow_rows_after=self._visible_overflow_rows(conn, epoch),
+                    overflow_rows_after=prior_overflow_rows,
                     sqlite_commits=0,
                     coordinator_superblock_pwrites=0,
                     coordinator_explicit_fsyncs=0,
@@ -277,7 +293,6 @@ class CrossStoreHybridStore:
             conn.commit()
             if failpoint is not None:
                 failpoint("overflow_committed")
-            visible_after = self._visible_overflow_rows(conn, future_epoch)
         except BaseException:
             try:
                 conn.rollback()
@@ -287,6 +302,7 @@ class CrossStoreHybridStore:
         finally:
             conn.close()
 
+        visible_after = prior_overflow_rows + 1
         new_epoch = self._advance_superblock(epoch, visible_after)
         if failpoint is not None:
             failpoint("committed")
@@ -394,6 +410,7 @@ class CrossStoreHybridStore:
             "metadata_overflow_rows": meta_rows,
             "duplicate_with_primary": duplicate_with_primary,
             "committed_epoch": epoch,
+            "cleanup_epoch_index_used": self.cleanup_uses_epoch_index(),
         }
 
     def overflow_stats(self) -> dict[str, Any]:
