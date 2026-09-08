@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.23
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.24
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -40,7 +40,7 @@ The durable path currently contains:
 - facet-local stale-read protection;
 - machine-readable evidence anchors with executable replay verifiers.
 
-The v0.18–v0.23 hash/cuckoo/overflow structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.23 earns process-crash atomicity for the hybrid state machine, but its persistent primary tables are themselves SQLite B-trees, so direct-address physical locality remains unproven.
+The v0.18–v0.24 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.23 earned process-crash atomicity for the hybrid state machine. v0.24 removes the comparison index from the experimental primary path with direct fixed-page addressing, but it has not yet integrated exact overflow, proven device-I/O locality, or earned crash-safe physical tail reclamation.
 
 ## Deliberate non-claims
 
@@ -48,17 +48,19 @@ Current evidence does **not** establish:
 
 - production entity linking, semantic embeddings, or extraction accuracy;
 - distributed/replicated consistency;
-- hardware power-loss guarantees beyond the tested SQLite/storage stack;
+- hardware power-loss guarantees beyond the tested process-crash/storage stack;
 - arbitrary physical multi-writer execution;
 - production latency or dollar cost;
 - cold/archive recovery;
 - arbitrary ontology migration;
 - constant work for arbitrarily large live subject fan-out or facet values;
 - direct OS/device page-read locality independent of global memory;
-- constant comparison-tree depth as indexes grow;
+- constant comparison-tree depth for the current production membership indexes;
 - universally constant lookup under arbitrary collisions;
-- a physically direct-addressed production hybrid replacement for the membership B-tree;
-- WAL-frame, filesystem, fsync, or device write-amplification bounds for the hybrid;
+- a production-ready physically direct-addressed hybrid replacement for the membership B-tree;
+- equivalence between `os.pread`/`os.pwrite` invocation counts and filesystem/device I/O;
+- crash-safe reclamation of uncommitted fixed-page tails;
+- WAL-frame, filesystem, fsync, or device write-amplification bounds for the complete hybrid;
 - a strong agentic-RAG superiority result.
 
 ## Milestone ledger
@@ -87,7 +89,8 @@ Current evidence does **not** establish:
 | v0.20 | Can placement itself have a finite work cap? | Yes with bounded bucketized cuckoo placement, but concentrated capacity is finite: 16 keys. |
 | v0.21 | Can finite bounded domains provide an escape path? | Yes: capacity `16D`, mutation cap `200D`, miss pages `3D`; fixed D still has finite admission and proportional space. |
 | v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes in the tested model: ordinary primary hits remain isolated; overflow guarantees admission but honestly inherits logarithmic B-tree depth. |
-| v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remains unproven. |
+| v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remained unproven. |
+| v0.24 | Can the persistent primary remove comparison-tree traversal without losing crash atomicity? | Yes in the tested fixed-page model: 9/9 crash cases were exact pre/post images, arithmetic lookup remained index-free through 16,384 rows, and single-generation misses used 8 user-space `pread` calls; exact overflow and physical reclamation remain open. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md`, `*_results.json`, and milestone evidence anchors.
 
@@ -190,6 +193,31 @@ Persistent exceptional overflow still exposes B-tree geometry:
 
 The durable claim is transactional and logical. Primary bucket/stash page probes are model pages; the backing SQLite primary tables are themselves comparison B-trees. SQL row-write counts are not WAL frames, filesystem writes, fsyncs, or device writes. See `RESULTS_V0.23.md`, `durable_hybrid_evidence.json`, and `verify_durable_hybrid_results.py`.
 
+### v0.24 fixed-page primary locality
+
+v0.24 moves the experimental primary below SQLite comparison indexes. Every logical primary page has two CRC-protected 4096-byte physical copies, and two fixed superblocks carry the committed epoch. The primary address is computed directly:
+
+\[
+\boxed{ByteOffset=4096(2+2p+c)}
+\]
+
+for logical page `p` and copy `c in {0,1}`. `primary_index_structure` is explicitly `none`.
+
+All **9/9 real `SIGKILL` cases** across ordinary insertion, migration start, and migration progress matched the exact deterministic pre/post logical image required by the committed superblock epoch. Recovery required zero logical redo.
+
+Ordinary growth:
+
+| Membership rows | Max source slots | Max rows moved | Max logical pages written | Max placement work | Successful lookup max `pread` calls | Missing lookup `pread` calls |
+|---:|---:|---:|---:|---:|---:|---:|
+| 256 | 8 | 7 | 7 | 19 | 6 | 8 |
+| 1,024 | 8 | 8 | 9 | 26 | 6 | 8 |
+| 4,096 | 8 | 8 | 9 | 39 | 6 | 8 |
+| 16,384 | 8 | 8 | 12 | 39 | 6 | 8 |
+
+Eight migrations started and all eight completed. During active two-generation migration, successful lookup used at most **12** user-space `os.pread` calls and a missing lookup used **14**.
+
+The crash matrix also exposed an important non-equivalence: uncommitted `migration_start` crashes retained **139,264 bytes of unreachable physical tail** even though logical recovery was exact. Therefore zero logical redo does not imply zero physical cleanup. `os.pread` invocation counts likewise do not prove storage-device I/O locality. See `RESULTS_V0.24.md`, `fixed_page_primary_evidence.json`, and `verify_fixed_page_primary_results.py`.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -206,6 +234,7 @@ python run_bounded_placement_experiment.py
 python run_bounded_escape_experiment.py
 python run_rare_overflow_experiment.py
 python run_durable_hybrid_experiment.py
+python run_fixed_page_primary_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -223,6 +252,7 @@ python verify_bounded_placement_results.py
 python verify_bounded_escape_results.py
 python verify_rare_overflow_results.py
 python verify_durable_hybrid_results.py
+python verify_fixed_page_primary_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -258,13 +288,13 @@ Canonical mutation
   -> crash-safe completion
 
 Experimental membership alternative
-  -> bounded primary generation
+  -> fixed-page arithmetic-addressed bounded primary
   -> bounded incremental migration
-  -> explicit exact-key overflow
-  -> one WAL transaction per admission + migration step
+  -> dual-page copies + dual committed superblocks
+  -> exact exceptional overflow still to be reintegrated
 ```
 
-Twelve distinctions are now central:
+Fourteen distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -290,17 +320,23 @@ Twelve distinctions are now central:
 
 > Transactional crash atomicity does not imply physical direct-address locality; logical bucket pages and SQL row writes must not be confused with storage-engine or device I/O.
 
-## Next falsification target — persistent primary physical locality
+> Arithmetic page addressing and bounded `os.pread` call counts remove comparison-index traversal from the tested implementation, but they do not prove bounded device I/O.
 
-v0.23 earns crash-atomic hybrid admission in the tested single-writer SQLite WAL model, but the persistent primary is represented by SQLite `WITHOUT ROWID` comparison B-trees. That means the logical bounded-primary address does not yet imply a bounded physical root-to-page path.
+> Zero logical recovery work does not imply zero physical cleanup: an uncommitted generation can leave unreachable tail bytes after crash.
+
+## Next falsification target — durable fixed-page hybridization
+
+v0.24 earns an index-free arithmetic primary path in the tested fixed-page process-crash model, but it deliberately drops the exact overflow that v0.22/v0.23 used to guarantee admission. It also exposes unreachable physical tail after an aborted migration-start allocation.
 
 The next question is:
 
 \[
 \boxed{
-Can the bounded primary be represented persistently without reintroducing comparison-tree
-root-to-leaf growth on the common path, while preserving v0.23 crash atomicity and overflow honesty?
+Can the fixed-page bounded primary and exact exceptional overflow share one crash-atomic commit protocol,
+while keeping common-path page work bounded and making reclamation/write amplification explicit?
 }
 \]
 
-A v0.24 experiment should compare the current SQLite B-tree-backed primary with a fixed-page/page-addressed persistent layout. It should measure actual persistent page topology, allocator/version/checksum metadata, mutation write sets, crash boundaries, and recovery obligations. The page-addressed candidate must earn its extra complexity; v0.23's B-tree-backed primary remains the control, and no direct-address or device-I/O claim should be made without direct measurement.
+A v0.25 experiment should combine the fixed-page primary and exact overflow rather than adding another isolated locality model. It should include crash boundaries spanning both structures and measure fixed-page data/superblock writes, overflow page/WAL writes, `fsync` ordering/count, exceptional lookup amplification, and stale-tail reclamation. Any reclamation protocol must itself be idempotent and crash-safe; it must not silently add a global scan to the common path.
+
+The v0.23 SQLite hybrid remains the durable universal-admission control until the combined fixed-page hybrid survives.
