@@ -1,0 +1,408 @@
+{
+  "experiment": "v0.29_segmented_extent_mapping",
+  "semantic_guard": {
+    "membership_equal": true,
+    "materialization_equal": true,
+    "head_index_equal": true,
+    "all_derived_fresh": true,
+    "full_assembly_equal": true,
+    "partial_assembly_equal": true
+  },
+  "sweep": {
+    "page_size": 4096,
+    "bucket_size": 4,
+    "segment_bucket_pages": 16,
+    "segment_data_physical_pages": 32,
+    "descriptor_entry_bytes": 16,
+    "flat_entries_per_page": 256,
+    "radix_bits_per_level": 8,
+    "radix_fanout": 256,
+    "radix_levels": 8,
+    "logical_segment_bits": 64,
+    "radix_node_copies": 2,
+    "sample_count": 4096,
+    "capacities": [
+      1024,
+      16384,
+      262144,
+      4194304
+    ],
+    "rows": [
+      {
+        "old_capacity": 1024,
+        "new_capacity": 2048,
+        "new_bucket_pages": 512,
+        "logical_segments": 32,
+        "last_segment_id": 31,
+        "flat_last_descriptor_residue_bytes": 4096,
+        "flat_sampled_p50_bytes": 4096,
+        "flat_sampled_p95_bytes": 4096,
+        "flat_sampled_max_bytes": 4096,
+        "radix_sparse_allocation_tail_bytes": 188416,
+        "radix_sparse_new_descriptor_nodes": 7,
+        "radix_sparse_descriptor_reserved_pages": 14,
+        "radix_metadata_physical_preads": 18,
+        "radix_data_physical_preads": 2,
+        "radix_total_physical_preads": 20,
+        "radix_metadata_pwrites_new_path": 8,
+        "radix_superblock_pwrites": 1,
+        "radix_fsyncs": 2,
+        "dense_radix_logical_nodes": 8,
+        "dense_radix_physical_descriptor_pages": 16,
+        "dense_flat_descriptor_pages_single_copy": 1,
+        "sampled_keys": 4096
+      },
+      {
+        "old_capacity": 16384,
+        "new_capacity": 32768,
+        "new_bucket_pages": 8192,
+        "logical_segments": 512,
+        "last_segment_id": 511,
+        "flat_last_descriptor_residue_bytes": 8192,
+        "flat_sampled_p50_bytes": 4096,
+        "flat_sampled_p95_bytes": 8192,
+        "flat_sampled_max_bytes": 8192,
+        "radix_sparse_allocation_tail_bytes": 188416,
+        "radix_sparse_new_descriptor_nodes": 7,
+        "radix_sparse_descriptor_reserved_pages": 14,
+        "radix_metadata_physical_preads": 18,
+        "radix_data_physical_preads": 2,
+        "radix_total_physical_preads": 20,
+        "radix_metadata_pwrites_new_path": 8,
+        "radix_superblock_pwrites": 1,
+        "radix_fsyncs": 2,
+        "dense_radix_logical_nodes": 9,
+        "dense_radix_physical_descriptor_pages": 18,
+        "dense_flat_descriptor_pages_single_copy": 2,
+        "sampled_keys": 4096
+      },
+      {
+        "old_capacity": 262144,
+        "new_capacity": 524288,
+        "new_bucket_pages": 131072,
+        "logical_segments": 8192,
+        "last_segment_id": 8191,
+        "flat_last_descriptor_residue_bytes": 131072,
+        "flat_sampled_p50_bytes": 69632,
+        "flat_sampled_p95_bytes": 126976,
+        "flat_sampled_max_bytes": 131072,
+        "radix_sparse_allocation_tail_bytes": 188416,
+        "radix_sparse_new_descriptor_nodes": 7,
+        "radix_sparse_descriptor_reserved_pages": 14,
+        "radix_metadata_physical_preads": 18,
+        "radix_data_physical_preads": 2,
+        "radix_total_physical_preads": 20,
+        "radix_metadata_pwrites_new_path": 8,
+        "radix_superblock_pwrites": 1,
+        "radix_fsyncs": 2,
+        "dense_radix_logical_nodes": 39,
+        "dense_radix_physical_descriptor_pages": 78,
+        "dense_flat_descriptor_pages_single_copy": 32,
+        "sampled_keys": 4096
+      },
+      {
+        "old_capacity": 4194304,
+        "new_capacity": 8388608,
+        "new_bucket_pages": 2097152,
+        "logical_segments": 131072,
+        "last_segment_id": 131071,
+        "flat_last_descriptor_residue_bytes": 2097152,
+        "flat_sampled_p50_bytes": 1032192,
+        "flat_sampled_p95_bytes": 2002944,
+        "flat_sampled_max_bytes": 2097152,
+        "radix_sparse_allocation_tail_bytes": 188416,
+        "radix_sparse_new_descriptor_nodes": 7,
+        "radix_sparse_descriptor_reserved_pages": 14,
+        "radix_metadata_physical_preads": 18,
+        "radix_data_physical_preads": 2,
+        "radix_total_physical_preads": 20,
+        "radix_metadata_pwrites_new_path": 8,
+        "radix_superblock_pwrites": 1,
+        "radix_fsyncs": 2,
+        "dense_radix_logical_nodes": 520,
+        "dense_radix_physical_descriptor_pages": 1040,
+        "dense_flat_descriptor_pages_single_copy": 512,
+        "sampled_keys": 4096
+      }
+    ],
+    "flat_control_formula": "packed descriptor page = floor(segment_id/256); first sparse descriptor write extends the descriptor file by 4096*(page+1) bytes = Theta(C) for last segment",
+    "radix_candidate_formula": "physical segment is append-allocated near the committed frontier; one fresh mapping reserves 2*16 data-page slots plus 2*(8-1) descriptor-node slots = 46 pages = 188416 bytes",
+    "lookup_formula": "2 superblock preads + 2*8 radix-node preads + 2 data-page preads = 20 user-space preads",
+    "dense_descriptor_formula": "dual-copy radix descriptor pages = 2*(1 + sum_{e=1..7} ceil(K/256^e)); total metadata grows with materialized segment count K even though sparse high-id allocation work is bounded",
+    "measurement_scope": "deterministic arithmetic model of process-visible file-length span, fixed dual-copy segment/node slots, user-space pread/pwrite counts, and an abstract fsync persistence-ordering fault model. It does not measure filesystem allocated blocks, device I/O, latency, journaling, or hardware."
+  },
+  "persistence_ordering": {
+    "fault_model": "before an fsync barrier returns, any subset of writes since the prior barrier may be durable; after it returns, all prior writes are durable",
+    "safe_protocol": [
+      "write segment data, new radix nodes, and alternate parent copy at epoch T",
+      "fsync dependency file",
+      "write alternate fixed superblock committing epoch T",
+      "fsync superblock file"
+    ],
+    "one_barrier_control": [
+      "write segment data, mapping metadata, alternate parent copy, and alternate superblock epoch T",
+      "single fsync"
+    ],
+    "safe_case_count": 12,
+    "safe_invalid_case_count": 0,
+    "control_case_count": 17,
+    "control_invalid_case_count": 7,
+    "control_first_counterexample": {
+      "phase": "before_single_fsync",
+      "durable": [
+        "superblock"
+      ],
+      "valid": false
+    },
+    "safe_cases": [
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "nodes"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "data"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "data",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "data",
+          "nodes"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_dependency_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "after_dependency_fsync_before_commit",
+        "durable": [
+          "data",
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "after_commit_write_before_commit_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "after_commit_write_before_commit_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent",
+          "superblock"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "after_commit_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent",
+          "superblock"
+        ],
+        "valid": true
+      }
+    ],
+    "control_cases": [
+      {
+        "phase": "before_single_fsync",
+        "durable": [],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "parent",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "nodes"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "nodes",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "nodes",
+          "parent",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "parent",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "nodes"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "superblock"
+        ],
+        "valid": false
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "before_single_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent",
+          "superblock"
+        ],
+        "valid": true
+      },
+      {
+        "phase": "after_single_fsync",
+        "durable": [
+          "data",
+          "nodes",
+          "parent",
+          "superblock"
+        ],
+        "valid": true
+      }
+    ]
+  },
+  "hypothesis_under_test": "a bounded physical segment plus append-allocated fixed-depth radix extent map can decouple a high logical bucket identity from a capacity-scaled physical offset without reintroducing capacity-dependent sparse tail residue, lookup fan-out, or per-allocation metadata writes",
+  "prediction": "the packed flat-descriptor control will retain Theta(C) sparse file-length span for high logical segment ids, while the segmented radix candidate will hold first-allocation tail span, lookup preads, metadata pwrites, and publication barriers constant across the capacity sweep; dense descriptor storage should still grow with the number of materialized segments K",
+  "result": "survived the modeled capacity-scaling falsification: sparse high-id allocation is bounded at 188416 bytes (46 pages), lookup at 20 modeled user-space preads, fresh-path metadata at 8 pwrites plus one superblock pwrite, and two fsync barriers across all tested capacities. The packed flat descriptor grows with capacity. The safe dependency-before-commit ordering has zero invalid recovery states in the enumerated fault model, while the one-barrier control has explicit committed-pointer-before-dependency counterexamples.",
+  "surviving_claim": "within a fixed 64-bit logical-segment namespace and the stated persistence model, append-local segmentation plus a fixed-depth dual-copy radix extent map removes the v0.28 capacity-scaled address-span mechanism for a first sparse high-id write. This earns a bounded-address candidate, not a production replacement: total descriptor storage still grows with materialized segments.",
+  "measurement_scope": "deterministic arithmetic model of process-visible file-length span, fixed dual-copy segment/node slots, user-space pread/pwrite counts, and an abstract fsync persistence-ordering fault model. It does not measure filesystem allocated blocks, device I/O, latency, journaling, or hardware.",
+  "non_claims": [
+    "the fixed eight-level radix is not a proof of mathematically unbounded logical identifiers; extending beyond 64-bit segment ids would require another mechanism or more depth",
+    "dense descriptor storage is not constant; it grows with the number of materialized segments K",
+    "modeled user-space pread/pwrite counts are not filesystem or storage-device I/O counts",
+    "the persistence-ordering model is not a hardware power-loss, torn-sector, drive-cache, or filesystem-journal experiment",
+    "the experiment does not integrate the extent map into the v0.24/v0.25 primary or prove end-to-end production latency, throughput, reclamation, or concurrency behavior"
+  ]
+}
