@@ -7,6 +7,7 @@ from simulator.cross_store_hybrid import (
     SCENARIO_FAILPOINTS,
     run_common_envelope,
     run_crash_case,
+    run_future_row_resurrection_control,
     run_overflow_envelope,
     run_reclamation_scaling,
 )
@@ -64,6 +65,8 @@ def run() -> dict:
         raise AssertionError("recovery changed committed logical state")
     if not all(row["existing_keys_found"] and row["audit_valid_before_recovery"] for row in crash_rows):
         raise AssertionError("cross-store crash lost or duplicated committed membership")
+    if not all(row["audit_valid_after_recovery"] for row in crash_rows):
+        raise AssertionError("cross-store recovery broke membership audit")
     if not all(row["recovery_idempotent"] for row in crash_rows):
         raise AssertionError("cross-store recovery was not idempotent")
 
@@ -75,6 +78,16 @@ def run() -> dict:
         raise AssertionError("future overflow control did not leave one hidden durable row")
     if int(overflow_committed["recovery_one"]["deleted_future_overflow_rows"]) != 1:
         raise AssertionError("recovery did not remove hidden future overflow row")
+
+    resurrection = run_future_row_resurrection_control()
+    if int(resurrection["future_rows_before_startup_recovery"]) != 1:
+        raise AssertionError("resurrection control did not begin with one abandoned future row")
+    if int(resurrection["startup_deleted_future_rows"]) != 1:
+        raise AssertionError("startup recovery did not delete the abandoned future row")
+    if bool(resurrection["abandoned_key_visible_after_next_epoch"]):
+        raise AssertionError("abandoned future overflow row resurrected after a later epoch")
+    if not bool(resurrection["replacement_key_visible"]) or not bool(resurrection["audit_valid"]):
+        raise AssertionError("startup recovery control lost the replacement admission or audit")
 
     for failpoint in ("primary_pages_written", "primary_data_synced"):
         row = next(
@@ -100,6 +113,8 @@ def run() -> dict:
             raise AssertionError("ordinary fixed-page lookup exceeded v0.24 userspace pread envelope")
         if int(row["visible_overflow_rows"]) != 0 or not row["audit_valid"]:
             raise AssertionError("ordinary cross-store envelope contaminated overflow")
+        if not bool(row["cleanup_epoch_index_used"]):
+            raise AssertionError("ordinary hybrid lost indexed future-row cleanup path")
 
     overflow = run_overflow_envelope()
     heights = [int(row["overflow_btree_height"]) for row in overflow["rows"]]
@@ -114,18 +129,22 @@ def run() -> dict:
             raise AssertionError("overflow admission explicit fixed-file fsync count drifted")
         if int(row["sqlite_commits_per_admission"]) != 1:
             raise AssertionError("overflow admission SQLite commit count drifted")
+        if not bool(row["cleanup_epoch_index_used"]):
+            raise AssertionError("overflow envelope lost indexed cleanup path")
         if not row["audit_valid"]:
             raise AssertionError("persistent overflow envelope audit failed")
 
     reclamation = run_reclamation_scaling()
     reclaimed = [int(row["reclaimed_tail_bytes"]) for row in reclamation["rows"]]
     if reclaimed != sorted(reclaimed) or max(reclaimed) <= min(reclaimed):
-        raise AssertionError("reclamation control failed to expose growing stale-tail bytes")
+        raise AssertionError("reclamation control failed to expose growing stale-tail file range")
     for row in reclamation["rows"]:
         if int(row["tail_bytes_after_recovery"]) != 0:
             raise AssertionError("reclamation left stale tail")
         if int(row["truncate_calls"]) != 1 or int(row["fixed_file_fsyncs"]) != 1:
             raise AssertionError("reclamation syscall envelope drifted")
+        if not bool(row["cleanup_epoch_index_used"]):
+            raise AssertionError("reclamation lost indexed future-row cleanup path")
         if int(row["logical_redo"]) != 0 or not row["audit_valid"]:
             raise AssertionError("reclamation required logical redo or broke audit")
 
@@ -140,6 +159,7 @@ def run() -> dict:
             "partial_assembly_equal": semantic_guard["partial_assembly_equal"],
         },
         "crash_rows": crash_rows,
+        "future_row_resurrection_control": resurrection,
         "common_envelope": common,
         "overflow_envelope": overflow,
         "reclamation_scaling": reclamation,
@@ -151,22 +171,25 @@ def run() -> dict:
         ),
         "prediction": (
             "overflow rows committed before the primary coordinator epoch advances must remain "
-            "invisible and be deleted by recovery; pre-commit migration allocation must be "
-            "truncatable to the committed next_page_id frontier; ordinary primary hits must not "
-            "query overflow. If stale-tail bytes grow with generation capacity, strict bounded "
-            "physical-reclamation volume is falsified even if reclamation uses one truncate call."
+            "invisible and be deleted before a later mutation can advance the epoch; pre-commit "
+            "migration allocation must be truncatable to the committed next_page_id frontier; "
+            "ordinary primary hits must not query overflow. If the stale-tail file-length range "
+            "grows with generation capacity, one truncate syscall must not be interpreted as "
+            "evidence of bounded physical cleanup work."
         ),
         "result": (
-            "survives only if the crash oracle, common-path isolation, exact overflow geometry, "
-            "and safe idempotent reclamation all pass. Growing reclaimed byte volume is retained "
-            "as a negative result rather than inferred away from constant syscall counts."
+            "the tested cross-store commit boundary, startup future-row cleanup, common-path "
+            "isolation, exact overflow admission, and idempotent tail truncation survive. The "
+            "stale uncommitted file-length range grows with generation capacity, so constant "
+            "truncate-call count does not establish constant reclamation volume or device work."
         ),
         "measurement_scope": (
             "exact logical snapshots across a fixed-page file plus persistent SQLite overflow, "
             "real process SIGKILL, userspace fixed-file pread/pwrite/fsync calls, SQLite logical "
-            "commit count, SQLite dbstat B-tree height, file sizes, and reclaimed bytes. SQLite "
-            "internal fsync/WAL-frame counts, filesystem/device I/O, cache misses, power-loss "
-            "torn-write behavior, multi-writer semantics, and production latency are not measured."
+            "commit count, SQLite dbstat B-tree height, file length, and truncated stale-tail "
+            "byte ranges. SQLite internal fsync/WAL-frame counts, filesystem allocated-block "
+            "reclamation, device I/O, cache misses, power-loss torn-write behavior, multi-writer "
+            "semantics, and production latency are not measured."
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2))
