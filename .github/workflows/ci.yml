@@ -47,6 +47,7 @@ jobs:
       - run: python verify_bounded_escape_results.py
       - run: python verify_rare_overflow_results.py
       - run: python verify_durable_hybrid_results.py
+      - run: python verify_fixed_page_primary_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
