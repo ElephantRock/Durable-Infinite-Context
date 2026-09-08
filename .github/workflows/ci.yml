@@ -30,6 +30,7 @@ jobs:
       - run: python run_rare_overflow_experiment.py
       - run: python run_durable_hybrid_experiment.py
       - run: python run_fixed_page_primary_experiment.py
+      - run: python run_cross_store_hybrid_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -127,4 +128,9 @@ jobs:
         with:
           name: v0.24-fixed-page-primary-results
           path: fixed_page_primary_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.25-cross-store-hybrid-results
+          path: cross_store_hybrid_results.json
           if-no-files-found: error
