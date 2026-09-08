@@ -34,6 +34,7 @@ jobs:
       - run: python run_recovery_interruption_experiment.py
       - run: python run_persistence_fault_experiment.py
       - run: python run_lazy_generation_allocation_experiment.py
+      - run: python run_segmented_extent_mapping_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -155,4 +156,9 @@ jobs:
         with:
           name: v0.28-lazy-generation-allocation-results
           path: lazy_generation_allocation_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.29-segmented-extent-mapping-results
+          path: segmented_extent_mapping_results.json
           if-no-files-found: error
