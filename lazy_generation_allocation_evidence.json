@@ -1,0 +1,34 @@
+{
+  "experiment": "v0.28_lazy_generation_allocation",
+  "initial_successful_ci": {
+    "run_number": 263,
+    "run_id": 34250517135,
+    "head_sha": "94ca178eb653ae24f43257941f11ba9ff7740056",
+    "artifact_id": 10066354318,
+    "artifact_name": "v0.28-lazy-generation-allocation-results",
+    "artifact_sha256": "f78e49dfa066122c3cd52e6ab793ed4fc6aed5ccd860b6b7170c0a34e8535430",
+    "lazy_generation_allocation_results_json_sha256": "bbf4b1285909fdaf429d59d7a63bbbd386b25b082f337188e083691f434eb405"
+  },
+  "fixed_sweep": {
+    "old_capacities": [32, 128, 512, 2048],
+    "bucket_size": 4,
+    "sample_count_per_capacity": 4096,
+    "page_size": 4096
+  },
+  "observed": {
+    "pages_materialized_by_first_lazy_write": 1,
+    "eager_extension_bytes": [139264, 532480, 2105344, 8396800],
+    "lazy_last_bucket_bytes": [126976, 520192, 2093056, 8384512],
+    "lazy_stash_bytes": [135168, 528384, 2101248, 8392704],
+    "sampled_p50_bytes": [61440, 258048, 1069056, 4206592],
+    "sampled_p95_bytes": [126976, 495616, 1994752, 7958528],
+    "sampled_max_bytes": [126976, 520192, 2093056, 8384512]
+  },
+  "surviving_claim": "With the v0.24 dual-copy direct-address layout, deleting eager full-generation extension does not asymptotically bound stale file-length residue. A first lazy write materializes one logical page but can extend file length by 4096(C-1) bytes for the last bucket or 4096(C+1) for the stash, both Theta(C).",
+  "non_claims": [
+    "file-length range is not filesystem allocated-block usage",
+    "one logical page materialized is not one physical storage-device write",
+    "sparse-file allocation, filesystem journaling, latency, and hardware power-loss behavior are not measured",
+    "v0.28 does not establish an extent-map or segmented-address replacement"
+  ]
+}
