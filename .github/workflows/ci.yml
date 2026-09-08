@@ -32,6 +32,7 @@ jobs:
       - run: python run_fixed_page_primary_experiment.py
       - run: python run_cross_store_hybrid_experiment.py
       - run: python run_recovery_interruption_experiment.py
+      - run: python run_persistence_fault_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -141,4 +142,9 @@ jobs:
         with:
           name: v0.26-recovery-interruption-results
           path: recovery_interruption_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.27-persistence-fault-results
+          path: persistence_fault_results.json
           if-no-files-found: error
