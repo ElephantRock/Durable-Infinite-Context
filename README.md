@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.22
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.23
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -38,9 +38,9 @@ The durable path currently contains:
 - normalized indexed `(subject,predicate)` membership;
 - constant-size subject profile descriptors;
 - facet-local stale-read protection;
-- machine-readable evidence ledgers with executable replay verifiers.
+- machine-readable evidence anchors with executable replay verifiers.
 
-The v0.18–v0.22 hash/cuckoo/overflow structures are **experimental alternatives**, not yet replacements for the production membership B-tree.
+The v0.18–v0.23 hash/cuckoo/overflow structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.23 earns process-crash atomicity for the hybrid state machine, but its persistent primary tables are themselves SQLite B-trees, so direct-address physical locality remains unproven.
 
 ## Deliberate non-claims
 
@@ -57,7 +57,8 @@ Current evidence does **not** establish:
 - direct OS/device page-read locality independent of global memory;
 - constant comparison-tree depth as indexes grow;
 - universally constant lookup under arbitrary collisions;
-- a crash-safe hybrid hash/overflow replacement for the production B-tree;
+- a physically direct-addressed production hybrid replacement for the membership B-tree;
+- WAL-frame, filesystem, fsync, or device write-amplification bounds for the hybrid;
 - a strong agentic-RAG superiority result.
 
 ## Milestone ledger
@@ -86,8 +87,9 @@ Current evidence does **not** establish:
 | v0.20 | Can placement itself have a finite work cap? | Yes with bounded bucketized cuckoo placement, but concentrated capacity is finite: 16 keys. |
 | v0.21 | Can finite bounded domains provide an escape path? | Yes: capacity `16D`, mutation cap `200D`, miss pages `3D`; fixed D still has finite admission and proportional space. |
 | v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes in the tested model: ordinary primary hits remain isolated; overflow guarantees admission but honestly inherits logarithmic B-tree depth. |
+| v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remains unproven. |
 
-Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md` and `*_results.json`.
+Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md`, `*_results.json`, and milestone evidence anchors.
 
 ## Selected validated measurements
 
@@ -152,17 +154,31 @@ Finite escalation is coherent, but unlimited escalation would simply move non-lo
 
 v0.22 keeps **one bounded v0.20 primary domain** and sends only exhausted placements to an exact-key SQLite `WITHOUT ROWID` B-tree overflow.
 
-Ordinary `N={1k,4k,16k,64k,256k}` remains entirely on the primary path:
+Ordinary `N={1k,4k,16k,64k,256k}` remains entirely on the primary path. After deliberately saturating the primary's concentrated capacity, exceptional lookup follows:
 
-| N | Overflow insertions | Primary max mutation work | Primary lookup page max | Primary-hit overflow checks |
-|---:|---:|---:|---:|---:|
-| 1,000 | 0 | 17 | 2 | 0 |
-| 4,000 | 0 | 17 | 2 | 0 |
-| 16,000 | 0 | 22 | 2 | 0 |
-| 64,000 | 0 | 27 | 2 | 0 |
-| 256,000 | 0 | 30 | 2 | 0 |
+\[
+\boxed{ExceptionalLookupPages(O)=3+Height_{BTree}(O)}
+\]
 
-After deliberately saturating the primary's 16-key concentrated capacity, every later key is admitted to overflow. Overflow depth grows explicitly:
+The defensible result is **common/exceptional-path separation**, not universal constant lookup. See `RESULTS_V0.22.md`, `rare_overflow_results.json`, and `verify_rare_overflow_results.py`.
+
+### v0.23 durable hybrid admission
+
+The persistent candidate commits one logical admission, one bounded source-migration step, overflow routing, and generation metadata in a single SQLite WAL transaction with `synchronous=FULL`.
+
+The fixed real-process crash matrix covers five scenarios × three failpoints = **15 `SIGKILL` cases**. All 15 produced exactly the deterministic pre-transaction or post-transaction logical snapshot required by the commit boundary. Every case preserved membership audits and pre-existing keys, and two consecutive recovery passes required **zero application redo or repair**.
+
+Ordinary persistent growth:
+
+| Membership rows | Interval max primary work | Max source slots | Max rows moved | Overflow rows | Successful overflow checks | Metadata rows |
+|---:|---:|---:|---:|---:|---:|---:|
+| 256 | 27 | 8 | 8 | 0 | 0 | 1 |
+| 1,024 | 30 | 8 | 8 | 0 | 0 | 1 |
+| 4,096 | 34 | 8 | 8 | 0 | 0 | 1 |
+
+Six migrations started and all six completed. The conservative derived primary-work bound is **1808 modeled operations**; the observed ordinary maximum was **34**.
+
+Persistent exceptional overflow still exposes B-tree geometry:
 
 | Overflow rows `O` | B-tree height | Overflow-hit modeled pages | Missing-key modeled pages |
 |---:|---:|---:|---:|
@@ -171,16 +187,8 @@ After deliberately saturating the primary's 16-key concentrated capacity, every 
 | 64 | 1 | 4 | 4 |
 | 256 | 2 | 5 | 5 |
 | 1,024 | 2 | 5 | 5 |
-| 4,096 | 2 | 5 | 5 |
-| 16,384 | 3 | 6 | 6 |
 
-The saturated primary miss contributes 3 modeled pages, so:
-
-\[
-\boxed{ExceptionalLookupPages(O)=3+Height_{BTree}(O)}
-\]
-
-The defensible result is therefore **common/exceptional-path separation**, not universal constant lookup. See `RESULTS_V0.22.md`, `rare_overflow_results.json`, and `verify_rare_overflow_results.py`.
+The durable claim is transactional and logical. Primary bucket/stash page probes are model pages; the backing SQLite primary tables are themselves comparison B-trees. SQL row-write counts are not WAL frames, filesystem writes, fsyncs, or device writes. See `RESULTS_V0.23.md`, `durable_hybrid_evidence.json`, and `verify_durable_hybrid_results.py`.
 
 ## Reproducing the hardened path
 
@@ -197,6 +205,7 @@ python run_incremental_hash_experiment.py
 python run_bounded_placement_experiment.py
 python run_bounded_escape_experiment.py
 python run_rare_overflow_experiment.py
+python run_durable_hybrid_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -213,6 +222,7 @@ python verify_incremental_hash_results.py
 python verify_bounded_placement_results.py
 python verify_bounded_escape_results.py
 python verify_rare_overflow_results.py
+python verify_durable_hybrid_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -246,9 +256,15 @@ Canonical mutation
   -> affected membership/facet repair
   -> selective retirement
   -> crash-safe completion
+
+Experimental membership alternative
+  -> bounded primary generation
+  -> bounded incremental migration
+  -> explicit exact-key overflow
+  -> one WAL transaction per admission + migration step
 ```
 
-Eleven distinctions are now central:
+Twelve distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -272,17 +288,19 @@ Eleven distinctions are now central:
 
 > Guaranteed admission can coexist with a bounded common path only by making exceptional cost explicit; exceptional lookup is not thereby constant.
 
-## Next falsification target — durable hybrid admission
+> Transactional crash atomicity does not imply physical direct-address locality; logical bucket pages and SQL row writes must not be confused with storage-engine or device I/O.
 
-v0.22 earns an algorithmic common/exceptional split. It does **not** yet earn a production replacement for the B-tree because the hybrid is not persistent and has not been integrated with incremental migration.
+## Next falsification target — persistent primary physical locality
+
+v0.23 earns crash-atomic hybrid admission in the tested single-writer SQLite WAL model, but the persistent primary is represented by SQLite `WITHOUT ROWID` comparison B-trees. That means the logical bounded-primary address does not yet imply a bounded physical root-to-page path.
 
 The next question is:
 
 \[
 \boxed{
-Can bounded primary migration and explicit overflow admission remain transactionally correct
-across crashes without contaminating common-path locality?
+Can the bounded primary be represented persistently without reintroducing comparison-tree
+root-to-leaf growth on the common path, while preserving v0.23 crash atomicity and overflow honesty?
 }
 \]
 
-A v0.23 experiment should integrate v0.19-style incremental generation migration with the v0.22 bounded-primary/overflow policy and inject crashes around every move/admission boundary. It must test duplicate/lost membership, idempotent recovery, stale/missing reads during active migration, common-path isolation after persistence metadata, overflow write amplification, and recovery work.
+A v0.24 experiment should compare the current SQLite B-tree-backed primary with a fixed-page/page-addressed persistent layout. It should measure actual persistent page topology, allocator/version/checksum metadata, mutation write sets, crash boundaries, and recovery obligations. The page-addressed candidate must earn its extra complexity; v0.23's B-tree-backed primary remains the control, and no direct-address or device-I/O claim should be made without direct measurement.
