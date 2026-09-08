@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.24
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.25
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -40,7 +40,7 @@ The durable path currently contains:
 - facet-local stale-read protection;
 - machine-readable evidence anchors with executable replay verifiers.
 
-The v0.18–v0.24 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.23 earned process-crash atomicity for the hybrid state machine. v0.24 removes the comparison index from the experimental primary path with direct fixed-page addressing, but it has not yet integrated exact overflow, proven device-I/O locality, or earned crash-safe physical tail reclamation.
+The v0.18–v0.25 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.25 now combines the arithmetic-addressed fixed-page primary with persistent exact overflow under a tested cross-store epoch protocol. It preserves common-path isolation and performs metadata/index-local cleanup after the tested crashes, but recovery interruption, filesystem/device cleanup cost, and production integration remain open.
 
 ## Deliberate non-claims
 
@@ -59,8 +59,10 @@ Current evidence does **not** establish:
 - universally constant lookup under arbitrary collisions;
 - a production-ready physically direct-addressed hybrid replacement for the membership B-tree;
 - equivalence between `os.pread`/`os.pwrite` invocation counts and filesystem/device I/O;
-- crash-safe reclamation of uncommitted fixed-page tails;
-- WAL-frame, filesystem, fsync, or device write-amplification bounds for the complete hybrid;
+- constant exceptional lookup: exact overflow still inherits B-tree depth;
+- crash safety when the v0.25 cleanup procedure itself is interrupted;
+- bounded filesystem allocated-block or device-level reclamation from one `ftruncate` call;
+- SQLite WAL-frame, filesystem, fsync, or device write-amplification bounds for the complete hybrid;
 - a strong agentic-RAG superiority result.
 
 ## Milestone ledger
@@ -90,7 +92,8 @@ Current evidence does **not** establish:
 | v0.21 | Can finite bounded domains provide an escape path? | Yes: capacity `16D`, mutation cap `200D`, miss pages `3D`; fixed D still has finite admission and proportional space. |
 | v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes in the tested model: ordinary primary hits remain isolated; overflow guarantees admission but honestly inherits logarithmic B-tree depth. |
 | v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remained unproven. |
-| v0.24 | Can the persistent primary remove comparison-tree traversal without losing crash atomicity? | Yes in the tested fixed-page model: 9/9 crash cases were exact pre/post images, arithmetic lookup remained index-free through 16,384 rows, and single-generation misses used 8 user-space `pread` calls; exact overflow and physical reclamation remain open. |
+| v0.24 | Can the persistent primary remove comparison-tree traversal without losing crash atomicity? | Yes in the tested fixed-page model: 9/9 crash cases were exact pre/post images, arithmetic lookup remained index-free through 16,384 rows, and single-generation misses used 8 user-space `pread` calls; exact overflow and physical reclamation remained open. |
+| v0.25 | Can fixed-page primary + exact overflow share a crash-atomic visibility protocol with safe cleanup? | Yes in the tested process-crash envelope: 6/6 cross-store crash cases were exact pre/post images, startup cleanup prevented future-row resurrection, and ordinary hits stayed isolated. The stale uncommitted file-length suffix is `4096(C+2)=Theta(C)`, and cleanup interruption is still untested. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md`, `*_results.json`, and milestone evidence anchors.
 
@@ -216,7 +219,39 @@ Ordinary growth:
 
 Eight migrations started and all eight completed. During active two-generation migration, successful lookup used at most **12** user-space `os.pread` calls and a missing lookup used **14**.
 
-The crash matrix also exposed an important non-equivalence: uncommitted `migration_start` crashes retained **139,264 bytes of unreachable physical tail** even though logical recovery was exact. Therefore zero logical redo does not imply zero physical cleanup. `os.pread` invocation counts likewise do not prove storage-device I/O locality. See `RESULTS_V0.24.md`, `fixed_page_primary_evidence.json`, and `verify_fixed_page_primary_results.py`.
+The crash matrix also exposed an important non-equivalence: uncommitted `migration_start` crashes retained **139,264 bytes of unreachable file tail** even though logical recovery was exact. Therefore zero logical redo does not imply zero cleanup. `os.pread` invocation counts likewise do not prove storage-device I/O locality. See `RESULTS_V0.24.md`, `fixed_page_primary_evidence.json`, and `verify_fixed_page_primary_results.py`.
+
+### v0.25 cross-store fixed-page hybrid
+
+v0.25 restores persistent exact exceptional overflow to the fixed-page primary without placing overflow on the successful common path. The fixed-page superblock epoch is the visibility coordinator. An exceptional row is committed to SQLite at future epoch `E+1`; it becomes logically visible only after the fixed-page coordinator commits `E+1`.
+
+All **6/6 real cross-store `SIGKILL` cases** matched the required exact pre/post logical image before and after cleanup. A committed-but-hidden future row remained absent, was deleted through the `overflow_epoch` index, and could not resurrect when a later admission advanced the epoch.
+
+Common-path growth:
+
+| Membership rows | Max source slots | Max rows moved | Successful lookup max fixed-file `pread`s | Successful overflow checks |
+|---:|---:|---:|---:|---:|
+| 256 | 8 | 7 | 6 | 0 |
+| 1,024 | 8 | 8 | 6 | 0 |
+| 4,096 | 8 | 8 | 6 | 0 |
+
+Exceptional overflow remains explicit:
+
+| Overflow rows | B-tree height | Primary miss fixed-file `pread`s | Extra coordinator `pread`s |
+|---:|---:|---:|---:|
+| 1 | 1 | 8 | 2 |
+| 16 | 1 | 8 | 2 |
+| 64 | 1 | 8 | 2 |
+| 256 | 2 | 8 | 2 |
+| 1,024 | 2 | 8 | 2 |
+
+The stale migration-start suffix obeyed:
+
+\[
+\boxed{StaleTailBytes(C)=4096(C+2)=\Theta(C)}
+\]
+
+with measured ranges `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for initial capacities `C={32,128,512,2048}`. Each completed cleanup used one `ftruncate` and one fixed-file `fsync`, but that constant syscall count is **not** a device-work claim. Filesystem allocated-block reclamation was not measured. See `RESULTS_V0.25.md` and the v0.25 evidence/verifier once hardened.
 
 ## Reproducing the hardened path
 
@@ -235,6 +270,7 @@ python run_bounded_escape_experiment.py
 python run_rare_overflow_experiment.py
 python run_durable_hybrid_experiment.py
 python run_fixed_page_primary_experiment.py
+python run_cross_store_hybrid_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -253,6 +289,7 @@ python verify_bounded_escape_results.py
 python verify_rare_overflow_results.py
 python verify_durable_hybrid_results.py
 python verify_fixed_page_primary_results.py
+python verify_cross_store_hybrid_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -291,10 +328,13 @@ Experimental membership alternative
   -> fixed-page arithmetic-addressed bounded primary
   -> bounded incremental migration
   -> dual-page copies + dual committed superblocks
-  -> exact exceptional overflow still to be reintegrated
+  -> persistent exact-key B-tree overflow
+  -> fixed-page epoch as cross-store visibility coordinator
+  -> indexed abandoned-future-row cleanup
+  -> metadata-derived stale-tail truncation
 ```
 
-Fourteen distinctions are now central:
+Fifteen distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -322,21 +362,23 @@ Fourteen distinctions are now central:
 
 > Arithmetic page addressing and bounded `os.pread` call counts remove comparison-index traversal from the tested implementation, but they do not prove bounded device I/O.
 
-> Zero logical recovery work does not imply zero physical cleanup: an uncommitted generation can leave unreachable tail bytes after crash.
+> Zero logical recovery work does not imply zero cleanup: an uncommitted generation can leave an unreachable suffix after crash.
 
-## Next falsification target — durable fixed-page hybridization
+> Cross-store epoch gating is insufficient by itself: a durable hidden future row must be removed before a later coordinator advance can make it accidentally visible.
 
-v0.24 earns an index-free arithmetic primary path in the tested fixed-page process-crash model, but it deliberately drops the exact overflow that v0.22/v0.23 used to guarantee admission. It also exposes unreachable physical tail after an aborted migration-start allocation.
+## Next falsification target — interrupted recovery
+
+v0.25 establishes completed, idempotent cleanup after the tested crashes, but the cleanup procedure itself has not yet been subjected to process death at its internal boundaries.
 
 The next question is:
 
 \[
 \boxed{
-Can the fixed-page bounded primary and exact exceptional overflow share one crash-atomic commit protocol,
-while keeping common-path page work bounded and making reclamation/write amplification explicit?
+Can recovery itself be killed at every cross-store cleanup boundary and still converge to the same committed state,
+without future-row resurrection, logical redo, or unreclaimed tail?
 }
 \]
 
-A v0.25 experiment should combine the fixed-page primary and exact overflow rather than adding another isolated locality model. It should include crash boundaries spanning both structures and measure fixed-page data/superblock writes, overflow page/WAL writes, `fsync` ordering/count, exceptional lookup amplification, and stale-tail reclamation. Any reclamation protocol must itself be idempotent and crash-safe; it must not silently add a global scan to the common path.
+A v0.26 experiment should add real `SIGKILL` failpoints around future-row deletion and fixed-tail truncation, including before/after SQLite cleanup commit, between SQLite cleanup and tail cleanup, and before/after the fixed-file cleanup `fsync`. Every interrupted recovery must reopen to the same committed logical image and converge under repeated restart.
 
-The v0.23 SQLite hybrid remains the durable universal-admission control until the combined fixed-page hybrid survives.
+Only after cleanup interruption safety survives should the project optimize the `Theta(C)` stale file-length range, for example by testing incremental generation allocation rather than eager full-generation extension.
