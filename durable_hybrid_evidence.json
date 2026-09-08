@@ -1,0 +1,53 @@
+{
+  "experiment": "v0.23_durable_hybrid_admission",
+  "initial_successful_ci": {
+    "run_number": 221,
+    "run_id": 34160481087,
+    "head_sha": "7ed3ba6dd36417c078003e92a28b640c46f992b6",
+    "artifact_id": 10032696091,
+    "artifact_name": "v0.23-durable-hybrid-results",
+    "artifact_sha256": "2863530eb237237c343403a323f511c636db15af399467adc0be0cea6b4b5f57",
+    "durable_hybrid_results_json_sha256": "52bb6cc67910cec599af81dd0d262c69435f43c62570dd3170a3e2dcb44b4f5b"
+  },
+  "fixed_crash_matrix": {
+    "scenarios": [
+      "ordinary_insert",
+      "migration_start",
+      "migration_progress",
+      "overflow_admission",
+      "migration_to_overflow"
+    ],
+    "failpoints": ["route_uncommitted", "final_uncommitted", "committed"],
+    "cases": 15,
+    "exact_pre_or_post_snapshots": 15,
+    "valid_membership_audits": 15,
+    "idempotent_zero_redo_recovery": 15
+  },
+  "ordinary_envelope": {
+    "membership_rows": [256, 1024, 4096],
+    "global_max_source_slots_scanned": 8,
+    "global_max_rows_moved": 8,
+    "global_max_primary_mutation_work": 34,
+    "derived_primary_mutation_work_bound": 1808,
+    "migration_starts": 6,
+    "migration_completions": 6,
+    "overflow_rows": 0,
+    "successful_lookup_overflow_checks": 0,
+    "successful_lookup_metadata_rows": 1,
+    "successful_lookup_primary_page_max": 2
+  },
+  "overflow_envelope": {
+    "overflow_rows": [1, 16, 64, 256, 1024],
+    "observed_btree_heights": [1, 1, 1, 2, 2],
+    "max_primary_mutation_work": 200,
+    "max_primary_sql_row_writes": 64,
+    "logical_overflow_row_write_per_admission": 1
+  },
+  "surviving_claim": "In the tested single-writer local SQLite WAL + synchronous=FULL model, one logical admission plus one bounded migration step and routing metadata is process-crash atomic: real SIGKILL exposes an exact pre-transaction or post-transaction logical snapshot with no application-level redo. Ordinary successful lookups remain overflow-independent in the tested envelope and migration source work stays within eight slots/rows.",
+  "non_claims": [
+    "primary logical bucket/stash page probes are not physical SQLite or device page reads",
+    "persistent primary tables are themselves SQLite B-trees, so direct-address physical locality is unproven",
+    "SQL row-write counts are not WAL frames, filesystem writes, fsync counts, or device write amplification",
+    "no multi-writer, distributed-consistency, hardware power-loss beyond the tested stack, or production-latency claim"
+  ]
+}
