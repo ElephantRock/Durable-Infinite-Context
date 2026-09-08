@@ -32,6 +32,7 @@ class CrossStoreCrashCase:
     exact_snapshot_match_after_recovery: bool
     existing_keys_found: bool
     audit_valid_before_recovery: bool
+    audit_valid_after_recovery: bool
     pre_recovery_future_overflow_rows: int
     pre_recovery_tail_bytes: int
     recovery_one: dict[str, Any]
@@ -179,23 +180,24 @@ def run_crash_case(scenario: str, failpoint: str) -> CrossStoreCrashCase:
         if not existing_found or not audit_before["valid"]:
             raise AssertionError(f"crash image lost/duplicated membership: {audit_before}")
 
-        recovery_one = _json_stdout(
-            _worker(crash_primary, crash_overflow, "recover")
-        )
-        recovery_two = _json_stdout(
-            _worker(crash_primary, crash_overflow, "recover")
-        )
+        recovery_one = _json_stdout(_worker(crash_primary, crash_overflow, "recover"))
+        recovery_two = _json_stdout(_worker(crash_primary, crash_overflow, "recover"))
         after_recovery = reopened.logical_snapshot()
+        audit_after = reopened.audit()
         if after_recovery != expected_snapshot:
             raise AssertionError("reclamation changed committed logical state")
+        if not audit_after["valid"]:
+            raise AssertionError(f"post-recovery audit failed: {audit_after}")
         if int(recovery_one["logical_redo"]) != 0 or int(recovery_two["logical_redo"]) != 0:
             raise AssertionError("cross-store recovery required logical redo")
+        if not recovery_one["cleanup_epoch_index_used"] or not recovery_two["cleanup_epoch_index_used"]:
+            raise AssertionError("recovery lost indexed future-row discovery")
         if int(recovery_two["deleted_future_overflow_rows"]) != 0:
             raise AssertionError("second recovery still had future overflow cleanup")
         if int(recovery_two["reclaimed_tail_bytes"]) != 0:
             raise AssertionError("second recovery still had fixed-tail cleanup")
-        if not recovery_one["logical_snapshot_unchanged"] or not recovery_two["logical_snapshot_unchanged"]:
-            raise AssertionError("physical cleanup changed logical snapshot")
+        if int(recovery_two["cleanup_sqlite_commits"]) != 0:
+            raise AssertionError("clean second recovery committed an unnecessary SQLite transaction")
 
         return CrossStoreCrashCase(
             scenario=scenario,
@@ -207,12 +209,60 @@ def run_crash_case(scenario: str, failpoint: str) -> CrossStoreCrashCase:
             exact_snapshot_match_after_recovery=True,
             existing_keys_found=existing_found,
             audit_valid_before_recovery=bool(audit_before["valid"]),
+            audit_valid_after_recovery=bool(audit_after["valid"]),
             pre_recovery_future_overflow_rows=int(audit_before["future_overflow_rows"]),
             pre_recovery_tail_bytes=pre_tail,
             recovery_one=recovery_one,
             recovery_two=recovery_two,
             recovery_idempotent=True,
         )
+
+
+def run_future_row_resurrection_control() -> dict[str, Any]:
+    """Prove startup cleanup is required before an epoch-advancing next mutation."""
+    with tempfile.TemporaryDirectory(prefix="dic-v025-resurrection-") as tmp:
+        root = Path(tmp)
+        primary = root / "primary.pages"
+        overflow = root / "overflow.sqlite"
+        _store, _keys, abandoned = prepare_scenario(primary, overflow, "overflow_admission")
+        crashed = _worker(
+            primary,
+            overflow,
+            "crash",
+            "--key",
+            abandoned,
+            "--failpoint",
+            "overflow_committed",
+            check=False,
+        )
+        if crashed.returncode != -signal.SIGKILL:
+            raise AssertionError("future-row resurrection control did not SIGKILL")
+
+        reopened = CrossStoreHybridStore(primary, overflow)
+        pre = reopened.audit()
+        if pre["future_overflow_rows"] != 1 or reopened.lookup(abandoned).found:
+            raise AssertionError("abandoned future row was not hidden before recovery")
+
+        next_key = "collision_000017"
+        trace = reopened.insert(next_key)
+        if trace.path != "overflow":
+            raise AssertionError("resurrection control next admission did not use overflow")
+        if trace.pre_admission_deleted_future_overflow_rows != 1:
+            raise AssertionError("startup mutation did not clean abandoned future row")
+        if reopened.lookup(abandoned).found:
+            raise AssertionError("abandoned future row resurrected after later epoch advance")
+        if not reopened.lookup(next_key).found:
+            raise AssertionError("post-recovery replacement overflow admission was lost")
+        audit = reopened.audit()
+        if not audit["valid"] or audit["future_overflow_rows"] != 0:
+            raise AssertionError(f"resurrection-control audit failed: {audit}")
+        return {
+            "future_rows_before_startup_recovery": int(pre["future_overflow_rows"]),
+            "startup_deleted_future_rows": int(trace.pre_admission_deleted_future_overflow_rows),
+            "abandoned_key_visible_after_next_epoch": bool(reopened.lookup(abandoned).found),
+            "replacement_key_visible": bool(reopened.lookup(next_key).found),
+            "audit_valid": bool(audit["valid"]),
+        }
 
 
 def _sample_keys(total: int, count: int = 128) -> list[str]:
@@ -273,6 +323,7 @@ def run_common_envelope(
                         int(row.overflow_checked) for row in samples
                     ),
                     "visible_overflow_rows": int(audit["visible_overflow_rows"]),
+                    "cleanup_epoch_index_used": bool(audit["cleanup_epoch_index_used"]),
                     "audit_valid": bool(audit["valid"]),
                 }
             )
@@ -352,6 +403,7 @@ def run_overflow_envelope(
                     "coordinator_explicit_fsyncs_per_admission": int(last_trace.coordinator_explicit_fsyncs),
                     "sqlite_commits_per_admission": int(last_trace.sqlite_commits),
                     "overflow_db_bytes": overflow_path.stat().st_size,
+                    "cleanup_epoch_index_used": bool(audit["cleanup_epoch_index_used"]),
                     "audit_valid": bool(audit["valid"]),
                 }
             )
@@ -394,14 +446,21 @@ def run_reclamation_scaling(
                 raise AssertionError("reclamation scaling fixture did not SIGKILL")
             reopened = CrossStoreHybridStore(primary, overflow)
             tail_before = _physical_tail_bytes(reopened)
+            logical_before = reopened.logical_snapshot()
             recovery = reopened.recover().to_dict()
+            logical_after = reopened.logical_snapshot()
+            audit_after = reopened.audit()
             tail_after = _physical_tail_bytes(reopened)
             if tail_before <= 0 or tail_after != 0:
                 raise AssertionError("stale primary tail was not deterministically reclaimed")
+            if logical_before != logical_after:
+                raise AssertionError("tail reclamation changed committed logical state")
             if int(recovery["reclaimed_tail_bytes"]) != tail_before:
                 raise AssertionError("reclaimed-byte accounting drifted")
             if int(recovery["truncate_calls"]) != 1 or int(recovery["fixed_file_fsyncs"]) != 1:
                 raise AssertionError("fixed-tail reclaim syscall envelope drifted")
+            if not recovery["cleanup_epoch_index_used"] or not audit_after["valid"]:
+                raise AssertionError("reclamation lost indexed cleanup or audit validity")
             rows.append(
                 {
                     "initial_capacity": capacity,
@@ -410,9 +469,12 @@ def run_reclamation_scaling(
                     "reclaimed_tail_bytes": int(recovery["reclaimed_tail_bytes"]),
                     "truncate_calls": int(recovery["truncate_calls"]),
                     "fixed_file_fsyncs": int(recovery["fixed_file_fsyncs"]),
+                    "cleanup_sqlite_commits": int(recovery["cleanup_sqlite_commits"]),
+                    "cleanup_epoch_index_used": bool(recovery["cleanup_epoch_index_used"]),
                     "tail_bytes_after_recovery": tail_after,
                     "logical_redo": int(recovery["logical_redo"]),
-                    "audit_valid": bool(recovery["audit_valid"]),
+                    "logical_snapshot_unchanged": logical_before == logical_after,
+                    "audit_valid": bool(audit_after["valid"]),
                 }
             )
     return {"rows": rows}
