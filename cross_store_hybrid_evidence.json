@@ -1,0 +1,68 @@
+{
+  "experiment": "v0.25_cross_store_hybrid_reclamation",
+  "initial_successful_ci": {
+    "run_number": 240,
+    "run_id": 34226111117,
+    "head_sha": "32cbc4009e4924788464c5da2e7a5170d2e39087",
+    "artifact_id": 10056323006,
+    "artifact_name": "v0.25-cross-store-hybrid-results",
+    "artifact_sha256": "7cd7379000e44a22c9b860524bae13daab185811531a1b8a58a986c74172a435",
+    "cross_store_hybrid_results_json_sha256": "ed6aced30b26306767ae4212abb6b519818235dd4d450a2894b4b392a30e68cf"
+  },
+  "cross_store_crash_matrix": {
+    "scenarios": ["overflow_admission", "migration_start"],
+    "cases": 6,
+    "exact_pre_or_post_snapshots_before_recovery": 6,
+    "exact_pre_or_post_snapshots_after_recovery": 6,
+    "valid_membership_audits_before_recovery": 6,
+    "valid_membership_audits_after_recovery": 6,
+    "idempotent_zero_logical_redo_recovery": 6
+  },
+  "future_row_cleanup": {
+    "hidden_durable_rows_at_overflow_committed_crash": 1,
+    "rows_deleted_by_first_recovery": 1,
+    "rows_deleted_by_second_recovery": 0,
+    "cleanup_epoch_index_used": true,
+    "resurrection_control_future_rows_before_startup": 1,
+    "resurrection_control_startup_deleted_rows": 1,
+    "abandoned_key_visible_after_later_epoch": false,
+    "replacement_key_visible": true
+  },
+  "common_envelope": {
+    "membership_rows": [256, 1024, 4096],
+    "global_max_source_slots_scanned": 8,
+    "global_max_rows_moved": 8,
+    "migration_starts": 6,
+    "migration_completions": 6,
+    "successful_lookup_fixed_file_pread_max": 6,
+    "successful_lookup_overflow_checks": 0
+  },
+  "exceptional_overflow": {
+    "overflow_rows": [1, 16, 64, 256, 1024],
+    "btree_heights": [1, 1, 1, 2, 2],
+    "primary_miss_fixed_file_preads": 8,
+    "coordinator_extra_fixed_file_preads": 2,
+    "sqlite_logical_commits_per_admission": 1,
+    "coordinator_superblock_pwrites_per_admission": 1,
+    "coordinator_explicit_fixed_file_fsyncs_per_admission": 1
+  },
+  "tail_reclamation": {
+    "initial_capacities": [32, 128, 512, 2048],
+    "reclaimed_file_length_bytes": [139264, 532480, 2105344, 8396800],
+    "formula": "4096 * (initial_capacity + 2)",
+    "asymptotic_file_length_range": "Theta(initial_capacity)",
+    "truncate_calls_per_nonempty_cleanup": 1,
+    "fixed_file_fsyncs_per_nonempty_cleanup": 1,
+    "logical_redo": 0
+  },
+  "surviving_claim": "In the tested single-writer process-crash model, a fixed-page committed epoch can coordinate persistent exact SQLite overflow without contaminating successful common-path lookup. Durable future rows remain hidden until coordinator commit, indexed startup cleanup prevents abandoned-row resurrection, and stale fixed-page suffixes can be truncated to the committed next_page_id frontier with zero application logical redo.",
+  "negative_result": "The stale uncommitted file-length range created by eager generation allocation is 4096*(C+2)=Theta(C). One ftruncate call therefore does not establish constant reclamation volume or device work.",
+  "non_claims": [
+    "the recovery procedure itself has not yet been interrupted by SIGKILL at internal cleanup boundaries",
+    "the stale-tail byte range is file length; filesystem allocated-block reclamation and device work are not measured",
+    "SQLite internal WAL-frame and fsync counts are not measured by the wrapper-level logical commit count",
+    "overflow lookup remains a comparison-B-tree path whose height grows with overflow cardinality",
+    "the tested process-crash protocol does not establish arbitrary hardware power-loss or torn-write behavior",
+    "no multi-writer, distributed-consistency, production-latency, throughput, or cost claim"
+  ]
+}
