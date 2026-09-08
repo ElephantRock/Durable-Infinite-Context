@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.25
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.27
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -40,7 +40,7 @@ The durable path currently contains:
 - facet-local stale-read protection;
 - machine-readable evidence anchors with executable replay verifiers.
 
-The v0.18–v0.25 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.25 now combines the arithmetic-addressed fixed-page primary with persistent exact overflow under a tested cross-store epoch protocol. It preserves common-path isolation and performs metadata/index-local cleanup after the tested crashes, but recovery interruption, filesystem/device cleanup cost, and production integration remain open.
+The v0.18–v0.27 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not yet replacements for the production membership B-tree. v0.27 strengthens the experimental hybrid's recovery story with an explicit volatile-versus-durable persistence-ordering model: derivation-based cleanup restart-converges when unsynced truncation is lost, while a durable cleanup-complete marker persisted before fixed-file `fsync` is rejected by counterexample. Hardware power-loss behavior, filesystem/device cleanup cost, `Theta(C)` stale-generation residue, and production integration remain open.
 
 ## Deliberate non-claims
 
@@ -48,7 +48,8 @@ Current evidence does **not** establish:
 
 - production entity linking, semantic embeddings, or extraction accuracy;
 - distributed/replicated consistency;
-- hardware power-loss guarantees beyond the tested process-crash/storage stack;
+- hardware power-loss guarantees from the abstract v0.27 persistence model;
+- torn-sector, drive write-cache, or filesystem-journaling behavior;
 - arbitrary physical multi-writer execution;
 - production latency or dollar cost;
 - cold/archive recovery;
@@ -60,7 +61,7 @@ Current evidence does **not** establish:
 - a production-ready physically direct-addressed hybrid replacement for the membership B-tree;
 - equivalence between `os.pread`/`os.pwrite` invocation counts and filesystem/device I/O;
 - constant exceptional lookup: exact overflow still inherits B-tree depth;
-- crash safety when the v0.25 cleanup procedure itself is interrupted;
+- bounded stale-tail reclamation volume under eager generation allocation;
 - bounded filesystem allocated-block or device-level reclamation from one `ftruncate` call;
 - SQLite WAL-frame, filesystem, fsync, or device write-amplification bounds for the complete hybrid;
 - a strong agentic-RAG superiority result.
@@ -93,7 +94,9 @@ Current evidence does **not** establish:
 | v0.22 | Can a bounded common path coexist with explicit rare overflow? | Yes in the tested model: ordinary primary hits remain isolated; overflow guarantees admission but honestly inherits logarithmic B-tree depth. |
 | v0.23 | Can bounded migration + overflow survive real process death atomically? | Yes in the tested single-writer WAL model: 15/15 crash cases were exact pre/post transaction images with zero application redo; physical primary locality remained unproven. |
 | v0.24 | Can the persistent primary remove comparison-tree traversal without losing crash atomicity? | Yes in the tested fixed-page model: 9/9 crash cases were exact pre/post images, arithmetic lookup remained index-free through 16,384 rows, and single-generation misses used 8 user-space `pread` calls; exact overflow and physical reclamation remained open. |
-| v0.25 | Can fixed-page primary + exact overflow share a crash-atomic visibility protocol with safe cleanup? | Yes in the tested process-crash envelope: 6/6 cross-store crash cases were exact pre/post images, startup cleanup prevented future-row resurrection, and ordinary hits stayed isolated. The stale uncommitted file-length suffix is `4096(C+2)=Theta(C)`, and cleanup interruption is still untested. |
+| v0.25 | Can fixed-page primary + exact overflow share a crash-atomic visibility protocol with safe cleanup? | Yes in the tested process-crash envelope: 6/6 cross-store crash cases were exact pre/post images, startup cleanup prevented future-row resurrection, and ordinary hits stayed isolated. The stale uncommitted file-length suffix is `4096(C+2)=Theta(C)`. |
+| v0.26 | Does cleanup itself restart-converge when killed at its internal boundaries? | Yes in the tested single-writer process-SIGKILL model: 8/8 interrupted-recovery cases preserved committed state, converged to zero residue with zero application redo, and did not resurrect abandoned future rows. |
+| v0.27 | Does the cleanup protocol survive a model that distinguishes volatile file state from durable state? | Yes for derivation-based cleanup in the nine-case abstract persistence model; an unsynced truncate is lost and repaired on restart. A durable cleanup marker written before file `fsync` is falsified by a stranded-tail counterexample. |
 
 Detailed narratives and machine-readable evidence live in `RESULTS_V0.*.md`, `*_results.json`, and milestone evidence anchors.
 
@@ -251,7 +254,39 @@ The stale migration-start suffix obeyed:
 \boxed{StaleTailBytes(C)=4096(C+2)=\Theta(C)}
 \]
 
-with measured ranges `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for initial capacities `C={32,128,512,2048}`. Each completed cleanup used one `ftruncate` and one fixed-file `fsync`, but that constant syscall count is **not** a device-work claim. Filesystem allocated-block reclamation was not measured. See `RESULTS_V0.25.md` and the v0.25 evidence/verifier once hardened.
+with measured ranges `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for initial capacities `C={32,128,512,2048}`. Each completed cleanup used one `ftruncate` and one fixed-file `fsync`, but that constant syscall count is **not** a device-work claim. Filesystem allocated-block reclamation was not measured. See `RESULTS_V0.25.md`, `cross_store_hybrid_evidence.json`, and `verify_cross_store_hybrid_results.py`.
+
+### v0.26 interrupted recovery
+
+v0.26 kills the cleanup procedure itself at the SQLite DELETE and fixed-tail truncate durability boundaries. The fixed matrix contains **8 real `SIGKILL` cases** over natural future-row residue, natural stale-tail residue, and a disclosed combined-residue control.
+
+All 8 interrupted recoveries preserved the exact committed logical snapshot, retained pre-existing membership, converged to zero future rows and zero stale tail, and required **zero application logical redo**. A second completed recovery was a cleanup no-op in every case. Later coordinator-epoch advancement did not resurrect abandoned future rows.
+
+The process-crash observation that `ftruncate` remained visible after `SIGKILL` before explicit file `fsync` is intentionally not promoted to a power-loss claim. See `RESULTS_V0.26.md`, `recovery_interruption_evidence.json`, and `verify_recovery_interruption_results.py`.
+
+### v0.27 explicit persistence ordering
+
+v0.27 replaces that inference with an abstract storage-ordering model that separately tracks volatile and durable file-size frontiers:
+
+\[
+\boxed{ftruncate:V\leftarrow new,\quad fsync:D\leftarrow V,\quad PowerLoss:V\leftarrow D}
+\]
+
+All **9/9** derived-recovery cases preserved exact committed logical state and restart-converged with zero application logical redo. The key distinction is now explicit:
+
+- unsynced truncate + power loss: durable stale tail returns to **139,264 bytes** in the base fixture;
+- synced truncate + power loss: durable stale tail remains **0**;
+- next derivation-based recovery re-observes the residue, truncates, syncs, and converges.
+
+A negative control durably writes `tail_clean=true` after truncate but before file `fsync`. Modeled power loss retains the marker while restoring the **139,264-byte** durable tail; marker-based retry then does nothing. Therefore:
+
+\[
+\boxed{DurableCleanupMarker\not\Rightarrow DurableCleanup}
+\]
+
+unless the marker is ordered after the storage operation it certifies or is ignored in favor of re-derivation.
+
+The eager-generation residue remains `4096(C+2)=Theta(C)` with measured retry reclamation of `139,264`, `532,480`, `2,105,344`, and `8,396,800` bytes for `C={32,128,512,2048}`. See `RESULTS_V0.27.md`, `persistence_fault_evidence.json`, and `verify_persistence_fault_results.py`.
 
 ## Reproducing the hardened path
 
@@ -271,6 +306,8 @@ python run_rare_overflow_experiment.py
 python run_durable_hybrid_experiment.py
 python run_fixed_page_primary_experiment.py
 python run_cross_store_hybrid_experiment.py
+python run_recovery_interruption_experiment.py
+python run_persistence_fault_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -290,6 +327,8 @@ python verify_rare_overflow_results.py
 python verify_durable_hybrid_results.py
 python verify_fixed_page_primary_results.py
 python verify_cross_store_hybrid_results.py
+python verify_recovery_interruption_results.py
+python verify_persistence_fault_results.py
 ```
 
 CI runs this chain on pull requests and uploads the hardened evidence ledgers as artifacts.
@@ -332,9 +371,11 @@ Experimental membership alternative
   -> fixed-page epoch as cross-store visibility coordinator
   -> indexed abandoned-future-row cleanup
   -> metadata-derived stale-tail truncation
+  -> cleanup residue re-derived on every restart
+  -> explicit volatile/durable persistence-ordering controls
 ```
 
-Fifteen distinctions are now central:
+Seventeen distinctions are now central:
 
 > Memory is durable state. Context is a bounded compiled artifact reconstructed for a task.
 
@@ -366,19 +407,21 @@ Fifteen distinctions are now central:
 
 > Cross-store epoch gating is insufficient by itself: a durable hidden future row must be removed before a later coordinator advance can make it accidentally visible.
 
-## Next falsification target — interrupted recovery
+> Restart convergence under process death does not establish hardware power-loss ordering.
 
-v0.25 establishes completed, idempotent cleanup after the tested crashes, but the cleanup procedure itself has not yet been subjected to process death at its internal boundaries.
+> A durable cleanup-complete marker is unsafe if it can become durable before the storage operation it certifies; re-derivation avoids that ordering dependency in the tested model.
+
+## Next falsification target — bounded crash residue
+
+v0.27 preserves cleanup correctness under the explicit persistence-ordering model, but eager migration-start allocation can still leave a stale file-length range proportional to generation capacity.
 
 The next question is:
 
 \[
 \boxed{
-Can recovery itself be killed at every cross-store cleanup boundary and still converge to the same committed state,
-without future-row resurrection, logical redo, or unreclaimed tail?
+Can generation space be allocated incrementally so crash residue and reclamation volume are bounded per mutation,
+without destroying arithmetic lookup locality, bounded migration work, or the crash/persistence contracts already earned?
 }
 \]
 
-A v0.26 experiment should add real `SIGKILL` failpoints around future-row deletion and fixed-tail truncation, including before/after SQLite cleanup commit, between SQLite cleanup and tail cleanup, and before/after the fixed-file cleanup `fsync`. Every interrupted recovery must reopen to the same committed logical image and converge under repeated restart.
-
-Only after cleanup interruption safety survives should the project optimize the `Theta(C)` stale file-length range, for example by testing incremental generation allocation rather than eager full-generation extension.
+A v0.28 experiment should compare eager generation extension against incremental/lazy page allocation, measure the maximum unreachable durable/volatile suffix created by one logical mutation, preserve direct arithmetic page addressing, and retain the v0.27 negative persistence-ordering controls.
