@@ -27,6 +27,7 @@ PER_FRESH_SEGMENT_MAX_PAGES = (
     DATA_PAGE_COPIES * SEGMENT_BUCKET_PAGES
     + RADIX_NODE_COPIES * (RADIX_LEVELS - 1)
 )
+DEFAULT_BUCKET_SIZE = 4
 DEFAULT_MAX_KICKS = 32
 DEFAULT_MIGRATION_BUDGET = 8
 DERIVED_TRANSACTION_SEGMENT_CAP = (
@@ -83,7 +84,31 @@ def _seed_key(capacity: int) -> str:
 
 
 def _target_key(capacity: int) -> str:
-    return f"v030-target-{capacity}"
+    """Choose a deterministic migration-start key that must touch a fresh segment.
+
+    The old generation occupies logical pages [0, C/bucket_size].  Because physical
+    segments group 16 logical pages, the first new-generation page can share the last
+    old-generation segment.  Search a bounded deterministic nonce space for a key whose
+    first cuckoo bucket lands beyond that overlapping segment.  The new generation is
+    empty when the target is placed, so its first bucket is the actual write location.
+    """
+    new_capacity = 2 * capacity
+    bucket_count = new_capacity // DEFAULT_BUCKET_SIZE
+    mask = bucket_count - 1
+    new_base_page = capacity // DEFAULT_BUCKET_SIZE + 1
+    old_last_segment = (new_base_page - 1) // SEGMENT_BUCKET_PAGES
+    for nonce in range(1_024):
+        candidate = f"v030-target-{capacity}-{nonce}"
+        first_bucket = (
+            SegmentedFixedPagePrimaryStore._hash(
+                candidate, SegmentedFixedPagePrimaryStore.HASH_KEY_1
+            )
+            & mask
+        )
+        target_page = new_base_page + first_bucket
+        if target_page // SEGMENT_BUCKET_PAGES > old_last_segment:
+            return candidate
+    raise AssertionError(f"v0.30 could not derive a fresh-segment target for C={capacity}")
 
 
 def prepare_capacity_fixture(
@@ -93,6 +118,7 @@ def prepare_capacity_fixture(
     store.initialize(
         initial_capacity=old_capacity,
         max_load=1.5 / old_capacity,
+        bucket_size=DEFAULT_BUCKET_SIZE,
         migration_slot_budget=DEFAULT_MIGRATION_BUDGET,
         max_kicks=DEFAULT_MAX_KICKS,
     )
