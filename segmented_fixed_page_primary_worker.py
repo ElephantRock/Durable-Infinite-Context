@@ -5,7 +5,7 @@ import json
 import os
 import signal
 
-from storage.segmented_fixed_page_primary import SegmentedFixedPagePrimaryStore
+from storage.transactional_segmented_primary import SegmentedFixedPagePrimaryStore
 
 FAILPOINTS = {"allocated", "pages_written", "data_synced", "committed"}
 
