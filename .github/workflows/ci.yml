@@ -59,6 +59,7 @@ jobs:
       - run: python verify_persistence_fault_results.py
       - run: python verify_lazy_generation_allocation_results.py
       - run: python verify_segmented_extent_mapping_results.py
+      - run: python verify_integrated_segmented_primary_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
