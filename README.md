@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.28
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.29
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -18,9 +18,9 @@ Architecture is treated as a surviving hypothesis, not as the goal. Negative res
 
 The production candidate still uses the normalized SQLite membership B-tree earned through v0.16. It provides revisable evidence/assertion semantics, valid- and knowledge-time queries, bounded context compilation, indexed candidate generation, dependency-aware invalidation/rebuild, transactional current heads, compositional facets, snapshot-consistent reads, and machine-readable replay evidence.
 
-The v0.18–v0.28 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, and an explicit volatile/durable persistence-ordering model.
+The v0.18–v0.29 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, and a modeled bounded-address segment-map candidate.
 
-v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier.
+v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification: append-local fixed-size segments plus an eight-level dual-copy radix extent map hold one fresh sparse high-id allocation to 188,416 bytes, lookup to 20 modeled user-space `pread`s, and publication to two `fsync` barriers across the capacity sweep, while explicitly retaining total descriptor growth with materialized segment count `K`.
 
 ## Deliberate non-claims
 
@@ -38,6 +38,8 @@ Current evidence does **not** establish:
 - constant exceptional lookup: exact overflow still inherits comparison-tree depth;
 - bounded filesystem allocated-block reclamation from file-length truncation;
 - bounded stale-generation residue under the current direct-address layout;
+- mathematically unbounded logical identifiers from the fixed eight-level/64-bit v0.29 radix namespace;
+- end-to-end crash safety or production performance for the v0.29 extent map before integration into the fixed-page primary;
 - a production-ready extent-map or segmented-address replacement;
 - a strong agentic-RAG superiority result.
 
@@ -73,6 +75,7 @@ Current evidence does **not** establish:
 | v0.26 | Does cleanup itself restart-converge when killed? | 8/8 interrupted-recovery cases preserved state and converged with zero logical redo. |
 | v0.27 | Does cleanup survive explicit volatile/durable ordering? | Yes for derivation-based cleanup; a premature durable cleanup marker is falsified by a stranded-tail counterexample. |
 | v0.28 | Does naive lazy allocation bound stale-generation residue? | No; one lazy page write can still create `Theta(C)` file-length residue because the direct address itself scales with capacity. |
+| v0.29 | Can segment mapping remove capacity-scaled sparse address span without moving non-locality into the mapper? | Yes in the fixed model: one fresh high-id mapping stays at 188,416 bytes, 20 modeled preads, 8 metadata pwrites + 1 superblock pwrite, and 2 fsyncs; dense metadata still grows with `K`. |
 
 Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_evidence.json`, and executable `verify_*_results.py` gates.
 
@@ -137,6 +140,29 @@ and, more generally:
 
 This is a file-length result only. It is not a filesystem allocated-block or device-write measurement.
 
+### v0.29 — segmented extent mapping
+
+v0.29 changes placement rather than merely delaying the same high-offset write. Sixteen logical bucket pages share one physical segment; segment data and radix metadata are append-allocated near the committed frontier. The fixed candidate uses an eight-level, fanout-256 radix map over a 64-bit logical-segment namespace with dual physical node copies.
+
+A fresh sparse high-id mapping reserves:
+
+\[
+\boxed{2\times16 + 2\times(8-1)=46\text{ pages}=188{,}416\text{ bytes}}
+\]
+
+and modeled lookup uses:
+
+\[
+\boxed{2 + 2\times8 + 2 = 20\text{ user-space preads}}
+\]
+
+across all tested capacities `C={1024,16384,262144,4194304}`. Fresh-path metadata remains eight radix `pwrite`s plus one superblock `pwrite`, with two `fsync` barriers. The packed flat-descriptor control grows from 4,096 to 2,097,152 bytes of sparse descriptor span, while dense dual-copy radix descriptor storage grows from 16 to 1,040 pages. Thus v0.29 bounds the *sparse high-id path* but does not claim constant total metadata.
+
+In the abstract persistence-ordering model, dependency-before-commit had 0 invalid states across 12 enumerated cases. The one-barrier control had 7 invalid states across 17 cases, including a durable superblock with absent data and mapping dependencies.
+
+This remains a deterministic arithmetic and abstract persistence-ordering result. The extent map is not yet integrated into the real fixed-page primary.
+
+
 ## Reproducing the hardened path
 
 ```bash
@@ -158,6 +184,7 @@ python run_cross_store_hybrid_experiment.py
 python run_recovery_interruption_experiment.py
 python run_persistence_fault_experiment.py
 python run_lazy_generation_allocation_experiment.py
+python run_segmented_extent_mapping_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -180,6 +207,7 @@ python verify_cross_store_hybrid_results.py
 python verify_recovery_interruption_results.py
 python verify_persistence_fault_results.py
 python verify_lazy_generation_allocation_results.py
+python verify_segmented_extent_mapping_results.py
 ```
 
 CI runs this chain and uploads the milestone evidence ledgers as artifacts.
@@ -212,19 +240,20 @@ Experimental membership alternative
   -> residue re-derived on restart
   -> explicit volatile/durable persistence-ordering controls
   -> naive lazy generation allocation rejected for Theta(C) address span
+  -> append-local segmented extent mapping survives bounded sparse-path model
 ```
 
-## Next falsification target — bounded segment mapping
+## Next falsification target — integrated segmented primary
 
-v0.28 shows that delaying physical materialization cannot solve the stale-range problem while logical bucket identity maps directly to a capacity-scaled physical offset.
+v0.29 removes the v0.28 capacity-scaled sparse-address mechanism in a deterministic arithmetic model, but the mapping layer is still not the storage engine used by the v0.24/v0.25 crash experiments.
 
 The next question is:
 
 \[
 \boxed{
-Can a bounded segment/extent mapping decouple logical bucket identity from physical file offset,
-so crash residue is bounded by fixed segment size without reintroducing growing lookup depth or metadata work?
+Can the segmented mapping preserve fixed-page lookup and visibility semantics under real file operations and process death,
+while keeping uncommitted file-length residue bounded independently of generation capacity?
 }
 \]
 
-A v0.29 experiment should fix a small segment size and explicitly measure descriptor reads, per-mutation descriptor writes, segment allocation residue, migration work, restart recovery, and descriptor growth. If locating a segment requires an unbounded table scan or comparison tree, or if common-path descriptor fan-out grows with generation size, the non-locality has merely moved into the mapping layer and the candidate should be rejected.
+A v0.30 experiment should integrate the segment map into the experimental fixed-page primary, exercise real `pread`/`pwrite`/`fsync` ordering, inject `SIGKILL` across allocation and publication phases, verify exact pre/post committed images, measure process-visible residue against generation capacity, and ensure restart recovery does not require a generation scan or unbounded logical redo. If crash safety, cleanup, or recovery reintroduces capacity-scaled work or address span, the v0.29 mechanism should be rejected as an integrated storage design.

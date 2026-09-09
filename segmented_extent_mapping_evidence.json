@@ -1,0 +1,80 @@
+{
+  "experiment": "v0.29_segmented_extent_mapping",
+  "initial_successful_ci": {
+    "run_number": 271,
+    "run_id": 34258805241,
+    "head_sha": "e4d1045a0bf4282cd991f610039b1baaa4604e8c",
+    "artifact_id": 10069861619,
+    "artifact_name": "v0.29-segmented-extent-mapping-results",
+    "artifact_sha256": "14320ed2f11fce149a735da64d442cf4d594eec73d664fb13da842a0de285034",
+    "segmented_extent_mapping_results_json_sha256": "af728a264be667eb23de0292a4c40a42011ec412133939d5b32f49da53431702"
+  },
+  "fixed_sweep": {
+    "capacities": [
+      1024,
+      16384,
+      262144,
+      4194304
+    ],
+    "bucket_size": 4,
+    "page_size": 4096,
+    "segment_bucket_pages": 16,
+    "radix_levels": 8,
+    "logical_segment_bits": 64,
+    "sample_count_per_capacity": 4096
+  },
+  "observed": {
+    "flat_last_descriptor_residue_bytes": [
+      4096,
+      8192,
+      131072,
+      2097152
+    ],
+    "radix_sparse_allocation_tail_bytes": [
+      188416,
+      188416,
+      188416,
+      188416
+    ],
+    "radix_total_physical_preads": [
+      20,
+      20,
+      20,
+      20
+    ],
+    "radix_metadata_pwrites_new_path": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "radix_superblock_pwrites": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "radix_fsyncs": [
+      2,
+      2,
+      2,
+      2
+    ],
+    "dense_radix_physical_descriptor_pages": [
+      16,
+      18,
+      78,
+      1040
+    ],
+    "safe_invalid_case_count": 0,
+    "control_invalid_case_count": 7
+  },
+  "surviving_claim": "within a fixed 64-bit logical-segment namespace and the stated persistence model, append-local segmentation plus a fixed-depth dual-copy radix extent map removes the v0.28 capacity-scaled address-span mechanism for a first sparse high-id write. This earns a bounded-address candidate, not a production replacement: total descriptor storage still grows with materialized segments.",
+  "non_claims": [
+    "the fixed eight-level radix is not a proof of mathematically unbounded logical identifiers; extending beyond 64-bit segment ids would require another mechanism or more depth",
+    "dense descriptor storage is not constant; it grows with the number of materialized segments K",
+    "modeled user-space pread/pwrite counts are not filesystem or storage-device I/O counts",
+    "the persistence-ordering model is not a hardware power-loss, torn-sector, drive-cache, or filesystem-journal experiment",
+    "the experiment does not integrate the extent map into the v0.24/v0.25 primary or prove end-to-end production latency, throughput, reclamation, or concurrency behavior"
+  ]
+}
