@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.29
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.30
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -18,9 +18,9 @@ Architecture is treated as a surviving hypothesis, not as the goal. Negative res
 
 The production candidate still uses the normalized SQLite membership B-tree earned through v0.16. It provides revisable evidence/assertion semantics, valid- and knowledge-time queries, bounded context compilation, indexed candidate generation, dependency-aware invalidation/rebuild, transactional current heads, compositional facets, snapshot-consistent reads, and machine-readable replay evidence.
 
-The v0.18–v0.29 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, and a modeled bounded-address segment-map candidate.
+The v0.18–v0.30 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, a modeled bounded-address segment map, and now an integrated append-local segmented primary that survives the tested real process-crash matrix.
 
-v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification: append-local fixed-size segments plus an eight-level dual-copy radix extent map hold one fresh sparse high-id allocation to 188,416 bytes, lookup to 20 modeled user-space `pread`s, and publication to two `fsync` barriers across the capacity sweep, while explicitly retaining total descriptor growth with materialized segment count `K`.
+v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification with append-local fixed-size segments and an eight-level dual-copy radix map. v0.30 integrates that mapper into the real experimental fixed-page primary: across forced migration at `C={32,2048,131072,4194304}`, the largest observed physical append is 147,456 bytes, target lookup remains 20 user-space `pread`s, and all 16 real `SIGKILL` cases expose exact pre/post committed state with scan-free, redo-free frontier recovery.
 
 ## Deliberate non-claims
 
@@ -38,8 +38,9 @@ Current evidence does **not** establish:
 - constant exceptional lookup: exact overflow still inherits comparison-tree depth;
 - bounded filesystem allocated-block reclamation from file-length truncation;
 - bounded stale-generation residue under the current direct-address layout;
-- mathematically unbounded logical identifiers from the fixed eight-level/64-bit v0.29 radix namespace;
-- end-to-end crash safety or production performance for the v0.29 extent map before integration into the fixed-page primary;
+- mathematically unbounded logical identifiers from the fixed eight-level/64-bit radix namespace;
+- hardware power-loss or torn-write safety from the v0.30 process-crash result;
+- dense radix-node split/overflow correctness beyond the experiment's one-page JSON node encoding;
 - a production-ready extent-map or segmented-address replacement;
 - a strong agentic-RAG superiority result.
 
@@ -76,6 +77,7 @@ Current evidence does **not** establish:
 | v0.27 | Does cleanup survive explicit volatile/durable ordering? | Yes for derivation-based cleanup; a premature durable cleanup marker is falsified by a stranded-tail counterexample. |
 | v0.28 | Does naive lazy allocation bound stale-generation residue? | No; one lazy page write can still create `Theta(C)` file-length residue because the direct address itself scales with capacity. |
 | v0.29 | Can segment mapping remove capacity-scaled sparse address span without moving non-locality into the mapper? | Yes in the fixed model: one fresh high-id mapping stays at 188,416 bytes, 20 modeled preads, 8 metadata pwrites + 1 superblock pwrite, and 2 fsyncs; dense metadata still grows with `K`. |
+| v0.30 | Does the segmented mapper survive integration with real fixed-page writes and process death? | Yes for the tested single-writer matrix: max append 147,456 B, target lookup 20 preads, 16/16 exact crash images, and frontier recovery with zero generation/radix scan or logical redo. |
 
 Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_evidence.json`, and executable `verify_*_results.py` gates.
 
@@ -160,7 +162,26 @@ across all tested capacities `C={1024,16384,262144,4194304}`. Fresh-path metadat
 
 In the abstract persistence-ordering model, dependency-before-commit had 0 invalid states across 12 enumerated cases. The one-barrier control had 7 invalid states across 17 cases, including a durable superblock with absent data and mapping dependencies.
 
-This remains a deterministic arithmetic and abstract persistence-ordering result. The extent map is not yet integrated into the real fixed-page primary.
+This remains a deterministic arithmetic and abstract persistence-ordering result. v0.30 supplies the first real fixed-page integration.
+
+### v0.30 — integrated segmented primary
+
+v0.30 replaces the experimental fixed-page primary's capacity-scaled physical page placement with append-local 16-logical-page segments published through the eight-level dual-copy radix map. The dual-copy superblock carries the committed physical append frontier. The writer uses a transaction-local radix view for staged nodes while restart readers retain committed-epoch filtering.
+
+Forced `C -> 2C` migration produced:
+
+| Old `C` | New logical base | Target segment id | Fresh segments | Physical append | Target lookup preads | Active-migration miss preads |
+|---:|---:|---:|---:|---:|---:|---:|
+| 32 | 9 | 1 | 1 | 131,072 B | 20 | 46 |
+| 2,048 | 513 | 80 | 1 | 131,072 B | 20 | 98 |
+| 131,072 | 32,769 | 4,618 | 1 | 139,264 B | 20 | 88 |
+| 4,194,304 | 1,048,577 | 98,773 | 1 | 147,456 B | 20 | 84 |
+
+The logical identifiers grow with capacity, but the physical append remains operation-local. The maximum observed append is 147,456 bytes, below the 188,416-byte one-fresh-segment envelope. Target lookup remains 20 user-space `pread` calls; the largest active-migration miss is 98, below the fixed two-generation envelope of 110.
+
+The real crash matrix injects `SIGKILL` after allocation, dependency writes, dependency `fsync`, and committed-superblock publication at all four capacities. All **16/16** cases match the exact expected committed state. Pre-commit tails equal the deterministic control append; committed kills have zero tail. Recovery uses two superblock reads, performs zero generation-page scan, zero mapping-node scan, and zero logical redo, truncates the uncommitted suffix to zero, and is physically idempotent on the second pass.
+
+This remains a single-writer process-crash result. It does not establish hardware power-loss/torn-write behavior, device-I/O counts, production performance, mathematically unbounded identifiers, or dense radix-node split/overflow behavior.
 
 
 ## Reproducing the hardened path
@@ -185,6 +206,7 @@ python run_recovery_interruption_experiment.py
 python run_persistence_fault_experiment.py
 python run_lazy_generation_allocation_experiment.py
 python run_segmented_extent_mapping_experiment.py
+python run_integrated_segmented_primary_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -208,6 +230,7 @@ python verify_recovery_interruption_results.py
 python verify_persistence_fault_results.py
 python verify_lazy_generation_allocation_results.py
 python verify_segmented_extent_mapping_results.py
+python verify_integrated_segmented_primary_results.py
 ```
 
 CI runs this chain and uploads the milestone evidence ledgers as artifacts.
@@ -241,19 +264,20 @@ Experimental membership alternative
   -> explicit volatile/durable persistence-ordering controls
   -> naive lazy generation allocation rejected for Theta(C) address span
   -> append-local segmented extent mapping survives bounded sparse-path model
+  -> integrated segmented primary survives tested real process-crash matrix
 ```
 
-## Next falsification target — integrated segmented primary
+## Next falsification target — dense radix-node overflow
 
-v0.29 removes the v0.28 capacity-scaled sparse-address mechanism in a deterministic arithmetic model, but the mapping layer is still not the storage engine used by the v0.24/v0.25 crash experiments.
+v0.30 survives the sparse-path integration test, but the mapper still assumes that each radix node's serialized JSON `entries` object fits inside one 4096-byte record. That assumption has not been exercised near fanout saturation.
 
 The next question is:
 
 \[
 \boxed{
-Can the segmented mapping preserve fixed-page lookup and visibility semantics under real file operations and process death,
-while keeping uncommitted file-length residue bounded independently of generation capacity?
+Can the mapping layer preserve bounded lookup, mutation, publication, and crash recovery
+when dense materialized prefixes force radix-node split or overflow behavior?
 }
 \]
 
-A v0.30 experiment should integrate the segment map into the experimental fixed-page primary, exercise real `pread`/`pwrite`/`fsync` ordering, inject `SIGKILL` across allocation and publication phases, verify exact pre/post committed images, measure process-visible residue against generation capacity, and ensure restart recovery does not require a generation scan or unbounded logical redo. If crash safety, cleanup, or recovery reintroduces capacity-scaled work or address span, the v0.29 mechanism should be rejected as an integrated storage design.
+A v0.31 experiment should fill a radix node to the one-page encoding limit, force the next mapping insertion to split or overflow, inject process death across child/parent/superblock publication, and verify exact pre/post committed maps. It should derive an explicit split-work bound, preserve or revise the fixed-depth lookup claim, and keep recovery frontier-derived rather than scan-based. If dense-node growth introduces an unbounded rewrite, recursive split cascade, capacity-scaled scan, or ambiguous crash image, the current v0.30 mapper is not yet a durable general storage structure.
