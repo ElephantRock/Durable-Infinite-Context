@@ -1,0 +1,101 @@
+{
+  "experiment": "v0.30_integrated_segmented_primary",
+  "initial_successful_full_historical_ci": {
+    "run_number": 280,
+    "run_id": 34362998037,
+    "head_sha": "2e8a0e3209c0d438033c611cd93547d57c382eb1",
+    "artifact_id": 10109302085,
+    "artifact_name": "v0.30-integrated-segmented-primary-results",
+    "artifact_sha256": "719573b3cf6b4a5c61f179cd3547b19723a2558f430bd42975b9468c7ad8775f",
+    "integrated_segmented_primary_results_json_sha256": "448373cde685166dc1c3c10ac23a0ce4d5c7c650f3c6617ac581acc6db700dd8"
+  },
+  "fixed_capacity_sweep": {
+    "capacities": [
+      32,
+      2048,
+      131072,
+      4194304
+    ],
+    "page_size": 4096,
+    "bucket_size": 4,
+    "segment_bucket_pages": 16,
+    "radix_levels": 8,
+    "radix_fanout": 256,
+    "logical_segment_bits": 64,
+    "max_kicks": 32,
+    "migration_slot_budget": 8,
+    "single_generation_lookup_pread_bound": 56,
+    "two_generation_lookup_pread_bound": 110,
+    "per_fresh_segment_max_bytes": 188416,
+    "derived_transaction_segment_cap": 305,
+    "derived_transaction_tail_cap_bytes": 57466880
+  },
+  "observed": {
+    "logical_generation_base_page": [
+      9,
+      513,
+      32769,
+      1048577
+    ],
+    "target_logical_segment_id_max": [
+      1,
+      80,
+      4618,
+      98773
+    ],
+    "new_segments_allocated": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "physical_bytes_appended": [
+      131072,
+      131072,
+      139264,
+      147456
+    ],
+    "radix_node_pwrites": [
+      1,
+      1,
+      2,
+      3
+    ],
+    "target_lookup_total_preads": [
+      20,
+      20,
+      20,
+      20
+    ],
+    "active_migration_missing_total_preads": [
+      46,
+      98,
+      88,
+      84
+    ],
+    "max_observed_physical_bytes_appended": 147456,
+    "crash_case_count": 16,
+    "all_exact_committed_state_match": true,
+    "all_existing_seed_visible": true,
+    "all_recovery_state_unchanged": true,
+    "max_uncommitted_tail_before_recovery_bytes": 147456,
+    "max_uncommitted_tail_after_recovery_bytes": 0,
+    "recovery_logical_work_max": 0,
+    "recovery_generation_pages_scanned_max": 0,
+    "recovery_mapping_nodes_scanned_max": 0,
+    "recovery_frontier_superblock_preads": [
+      2
+    ],
+    "second_recovery_physical_truncated_bytes_max": 0
+  },
+  "surviving_claim": "for the tested single-writer fixed-page primary, forced C->2C migration across C={32,2048,131072,4194304} preserved exact pre/post process-crash visibility while newly appended physical state remained operation-local rather than capacity-addressed. Recovery derived the committed frontier from two superblock reads and removed all uncommitted file-length residue without generation-page scan, mapping-node scan, or logical redo.",
+  "non_claims": [
+    "the process-crash experiment is not a hardware power-loss, torn-sector, drive-cache, or filesystem-journal correctness proof",
+    "user-space pread/pwrite counts are not storage-device I/O bounds",
+    "the experiment is single-writer and does not establish arbitrary multi-writer, distributed, or replicated correctness",
+    "the fixed eight-level radix namespace is not mathematically unbounded",
+    "total mapping metadata is not constant with materialized segment count",
+    "ftruncate convergence is a file-length result, not a filesystem allocated-block reclamation guarantee",
+    "radix-node split or overflow behavior near the one-page JSON record limit is not tested in v0.30"
+  ]
+}
