@@ -15,8 +15,8 @@ from storage.segmented_fixed_page_primary import (
     RADIX_NODE_COPIES,
     DATA_PAGE_COPIES,
     SEGMENT_BUCKET_PAGES,
-    SegmentedFixedPagePrimaryStore,
 )
+from storage.transactional_segmented_primary import SegmentedFixedPagePrimaryStore
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKER = ROOT / "segmented_fixed_page_primary_worker.py"
