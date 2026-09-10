@@ -1,0 +1,26 @@
+{
+  "artifact_id": 10139460269,
+  "artifact_sha256": "cffe21ddee73e381beff5ea1cb0b1827e0ca82aaf60cc207e790e56ad4392c31",
+  "head_sha": "205a3c33844195db59258bf39286b02177c32dcf",
+  "result_sha256": "79b7f10eb91f4cc80aab8ec30f9155e8a3c49b362bbf3c1b2c0cb865b3ee4e22",
+  "run_id": 34445408286,
+  "run_number": 2,
+  "workflow": "v0.32 experiment",
+  "surviving_observations": {
+    "cleanup_budget": 3,
+    "max_lifecycle_preads_per_step": 12,
+    "max_lifecycle_pwrites_per_step": 3,
+    "max_radix_pwrites_per_step": 3,
+    "max_reclaimed_per_step": 3,
+    "reclaim_physical_pages_appended_per_step": 0,
+    "reuse_data_page_scrub_pwrites": 32,
+    "reuse_physical_pages_appended": 0,
+    "unsafe_stale_payload_visible": true,
+    "safe_stale_payload_visible": false,
+    "reclaim_sigkill_cases_exact": 4,
+    "reuse_sigkill_cases_exact": 5,
+    "recovery_generation_pages_scanned": 0,
+    "recovery_mapping_nodes_scanned": 0,
+    "recovery_logical_redo": 0
+  }
+}
