@@ -144,6 +144,25 @@ def run() -> dict:
             },
         )
 
+    compact_budget_rows = [
+        {
+            "retired_segments": int(row["retired_segments"]),
+            "step_count": int(row["step_count"]),
+            "max_reclaimed_per_step": int(row["max_reclaimed_per_step"]),
+            "max_lifecycle_preads_per_step": int(row["max_lifecycle_preads_per_step"]),
+            "max_lifecycle_pwrites_per_step": int(row["max_lifecycle_pwrites_per_step"]),
+            "max_radix_pwrites_per_step": int(row["max_radix_pwrites_per_step"]),
+            "max_physical_pages_appended_per_step": int(
+                row["max_physical_pages_appended_per_step"]
+            ),
+            "final_free_count": int(row["final_free_count"]),
+            "materialize_physical_pages_appended": int(
+                row["materialize"]["physical_pages_appended"]
+            ),
+        }
+        for row in budget["rows"]
+    ]
+
     out = {
         "experiment": "v0.32_retired_generation_reclamation",
         "semantic_guard": {
@@ -155,10 +174,91 @@ def run() -> dict:
             "partial_assembly_equal": semantic_guard["partial_assembly_equal"],
         },
         "controls": controls,
-        "budget_sweep": budget,
-        "stale_payload_control": stale,
-        "reclaim_crash_matrix": reclaim_crash,
-        "reuse_crash_matrix": reuse_crash,
+        "budget_sweep": {
+            "budget": int(budget["budget"]),
+            "backlog_counts": list(budget["backlog_counts"]),
+            "global_max_reclaimed_per_step": int(
+                budget["global_max_reclaimed_per_step"]
+            ),
+            "global_max_lifecycle_preads_per_step": int(
+                budget["global_max_lifecycle_preads_per_step"]
+            ),
+            "global_max_lifecycle_pwrites_per_step": int(
+                budget["global_max_lifecycle_pwrites_per_step"]
+            ),
+            "global_max_radix_pwrites_per_step": int(
+                budget["global_max_radix_pwrites_per_step"]
+            ),
+            "global_max_physical_pages_appended_per_step": int(
+                budget["global_max_physical_pages_appended_per_step"]
+            ),
+            "rows": compact_budget_rows,
+        },
+        "stale_payload_control": {
+            "old_segment_id": int(stale["old_segment_id"]),
+            "new_segment_id": int(stale["new_segment_id"]),
+            "unsafe_reused_same_extent": int(stale["unsafe_old_segment_base_page"])
+            == int(stale["unsafe_reused_segment_base_page"]),
+            "unsafe_stale_payload_visible": bool(stale["unsafe_stale_payload_visible"]),
+            "safe_reused_same_extent": int(stale["safe_old_segment_base_page"])
+            == int(stale["safe_reused_segment_base_page"]),
+            "safe_stale_payload_visible": bool(stale["safe_stale_payload_visible"]),
+            "safe_old_mapping_visible": bool(stale["safe_old_mapping_visible"]),
+            "safe_data_page_scrub_pwrites": int(
+                stale["safe_reuse_trace"]["data_page_scrub_pwrites"]
+            ),
+            "safe_radix_node_pwrites": int(
+                stale["safe_reuse_trace"]["radix_node_pwrites"]
+            ),
+            "safe_physical_pages_appended": int(
+                stale["safe_reuse_trace"]["physical_pages_appended"]
+            ),
+            "safe_fsyncs": int(stale["safe_reuse_trace"]["fsyncs"]),
+        },
+        "reclaim_crash_matrix": {
+            "failpoints": list(reclaim_crash["failpoints"]),
+            "case_count": len(reclaim_crash["rows"]),
+            "clean_reclaimed_segments": int(
+                reclaim_crash["clean_trace"]["reclaimed_segments"]
+            ),
+            "clean_physical_pages_appended": int(
+                reclaim_crash["clean_trace"]["physical_pages_appended"]
+            ),
+            "all_exact_committed_state_match": bool(
+                reclaim_crash["all_exact_committed_state_match"]
+            ),
+            "all_recovery_scan_free": bool(reclaim_crash["all_recovery_scan_free"]),
+            "all_second_recovery_idempotent": bool(
+                reclaim_crash["all_second_recovery_idempotent"]
+            ),
+        },
+        "reuse_crash_matrix": {
+            "failpoints": list(reuse_crash["failpoints"]),
+            "case_count": len(reuse_crash["rows"]),
+            "clean_reused_same_extent": int(
+                reuse_crash["clean_reuse_trace"]["reused_segment_base_page"]
+            )
+            == int(reuse_crash["retired_segment_base_page"]),
+            "clean_data_page_scrub_pwrites": int(
+                reuse_crash["clean_reuse_trace"]["data_page_scrub_pwrites"]
+            ),
+            "clean_radix_node_pwrites": int(
+                reuse_crash["clean_reuse_trace"]["radix_node_pwrites"]
+            ),
+            "clean_physical_pages_appended": int(
+                reuse_crash["clean_reuse_trace"]["physical_pages_appended"]
+            ),
+            "all_exact_committed_state_match": bool(
+                reuse_crash["all_exact_committed_state_match"]
+            ),
+            "all_recovery_scan_free": bool(reuse_crash["all_recovery_scan_free"]),
+            "all_second_recovery_idempotent": bool(
+                reuse_crash["all_second_recovery_idempotent"]
+            ),
+            "all_retry_or_committed_reuse_exact": bool(
+                reuse_crash["all_retry_or_committed_reuse_exact"]
+            ),
+        },
         "observe": (
             "v0.31 bounds radix-node representation, but committed physical segments remain reachable "
             "until lifecycle cleanup removes their mappings. A flat retired-segment manifest grows with "
