@@ -36,6 +36,7 @@ jobs:
       - run: python run_lazy_generation_allocation_experiment.py
       - run: python run_segmented_extent_mapping_experiment.py
       - run: python run_integrated_segmented_primary_experiment.py
+      - run: python run_fixed_width_radix_node_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -60,6 +61,7 @@ jobs:
       - run: python verify_lazy_generation_allocation_results.py
       - run: python verify_segmented_extent_mapping_results.py
       - run: python verify_integrated_segmented_primary_results.py
+      - run: python verify_fixed_width_radix_node_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -169,4 +171,9 @@ jobs:
         with:
           name: v0.30-integrated-segmented-primary-results
           path: integrated_segmented_primary_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.31-fixed-width-radix-node-results
+          path: fixed_width_radix_node_results.json
           if-no-files-found: error

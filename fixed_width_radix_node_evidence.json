@@ -1,0 +1,78 @@
+{
+  "experiment": "v0.31_fixed_width_radix_nodes",
+  "initial_successful_ci": {
+    "run_number": 1,
+    "run_id": 34432870241,
+    "head_sha": "58c4e34f4469dc5882b543d8eefb11e2a827ef04",
+    "artifact_id": 10135116587,
+    "artifact_name": "v0.31-fixed-width-radix-node-results",
+    "artifact_sha256": "df78992947a07cb6a4eb54a25a6b2135e311238795299446c001b7598a8fa9f1",
+    "fixed_width_radix_node_results_json_sha256": "b208fa84c4bd1eec0a5e77f24cdfe23794e09c1fa3cf41ba667808dcb3888e88"
+  },
+  "fixed_model": {
+    "page_size": 4096,
+    "radix_levels": 8,
+    "radix_fanout": 256,
+    "logical_segment_bits": 64,
+    "physical_pointer_bits": 64,
+    "occupancy_bitmap_bytes": 32,
+    "pointer_array_bytes": 2048,
+    "fixed_node_used_bytes": 2103,
+    "fixed_node_padding_bytes": 1993,
+    "fresh_path_pages": 46,
+    "fresh_path_bytes": 188416
+  },
+  "observed": {
+    "pointer_bases": [
+      1000,
+      1000000,
+      1000000000,
+      1000000000000,
+      1000000000000000,
+      1000000000000000000,
+      18446744073709551360
+    ],
+    "json_effective_fanout": [
+      256,
+      256,
+      244,
+      207,
+      180,
+      159,
+      154
+    ],
+    "fixed_width_effective_fanout": [
+      256,
+      256,
+      256,
+      256,
+      256,
+      256,
+      256
+    ],
+    "dense_root_entries_before": 255,
+    "dense_root_entries_after": 256,
+    "node_splits": 0,
+    "recursive_split_depth": 0,
+    "final_mapping_physical_pages_appended": 46,
+    "final_mapping_radix_node_pwrites": 8,
+    "final_mapping_fsyncs": 2,
+    "crash_case_count": 5,
+    "all_exact_committed_state_match": true,
+    "max_uncommitted_tail_before_recovery_bytes": 188416,
+    "max_uncommitted_tail_after_recovery_bytes": 0,
+    "recovery_logical_work_max": 0,
+    "recovery_generation_pages_scanned_max": 0,
+    "recovery_mapping_nodes_scanned_max": 0,
+    "second_recovery_physical_truncated_bytes_max": 0
+  },
+  "surviving_claim": "within the fixed eight-level byte-radix and uint64 physical pointer model, replacing variable-width JSON node payloads with a 256-bit occupancy bitmap plus 256 fixed uint64 pointer slots restores true 256-way physical fanout in one 4096-byte node page. A real 255->256 root transition required zero node splits, eight radix-node writes, a 46-page fresh append, two fsync barriers, and preserved exact pre/post process-crash images with scan-free frontier recovery.",
+  "non_claims": [
+    "the fixed uint64 logical and physical pointer model is not mathematically unbounded",
+    "the process-crash experiment is not a hardware power-loss, torn-sector, drive-cache, or filesystem-journal correctness proof",
+    "user-space pread/pwrite counts are not storage-device I/O bounds",
+    "the experiment is single-writer and does not establish arbitrary multi-writer, distributed, or replicated correctness",
+    "total mapping metadata still grows with the number of materialized radix paths",
+    "the result does not establish production latency, throughput, reclamation, or filesystem allocated-block behavior"
+  ]
+}

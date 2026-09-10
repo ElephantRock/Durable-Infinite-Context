@@ -1,0 +1,362 @@
+{
+  "dense_root_crash_matrix": {
+    "all_exact_committed_state_match": true,
+    "all_recovery_scan_free": true,
+    "all_second_recovery_idempotent": true,
+    "case_count": 5,
+    "dense_root_fixture": {
+      "allocated_bytes": 7360512,
+      "file_size_bytes": 48062464,
+      "snapshot": {
+        "committed_epoch": 2,
+        "committed_physical_frontier_bytes": 48062464,
+        "file_size_bytes": 48062464,
+        "mappings": {
+          "18374686479671623680": null
+        },
+        "root_entry_count": 255,
+        "uncommitted_tail_bytes": 0
+      },
+      "trace": {
+        "committed_epoch": 2,
+        "committed_physical_frontier_bytes": 48062464,
+        "fsyncs": 2,
+        "mappings_requested": 255,
+        "new_segments_allocated": 255,
+        "physical_bytes_appended": 48046080,
+        "physical_pages_appended": 11730,
+        "radix_node_pwrites": 2040
+      }
+    },
+    "expected_fresh_path_bytes": 188416,
+    "expected_fresh_path_pages": 46,
+    "failpoints": [
+      "allocated",
+      "children_written",
+      "parent_written",
+      "dependencies_synced",
+      "committed"
+    ],
+    "final_mapping_trace": {
+      "committed_epoch": 3,
+      "committed_physical_frontier_bytes": 48250880,
+      "fsyncs": 2,
+      "mappings_requested": 1,
+      "new_segments_allocated": 1,
+      "physical_bytes_appended": 188416,
+      "physical_pages_appended": 46,
+      "radix_node_pwrites": 8
+    },
+    "max_uncommitted_tail_after_recovery_bytes": 0,
+    "max_uncommitted_tail_before_recovery_bytes": 188416,
+    "node_splits": 0,
+    "post_semantic_state": {
+      "committed_epoch": 3,
+      "committed_physical_frontier_bytes": 48250880,
+      "root_entry_count": 256,
+      "target_mapping": 11734
+    },
+    "pre_semantic_state": {
+      "committed_epoch": 2,
+      "committed_physical_frontier_bytes": 48062464,
+      "root_entry_count": 255,
+      "target_mapping": null
+    },
+    "recursive_split_depth": 0,
+    "root_entry_count_after": 256,
+    "root_entry_count_before": 255,
+    "rows": [
+      {
+        "crash_epoch": 2,
+        "crash_root_entry_count": 255,
+        "exact_committed_state_match": true,
+        "expected_committed": false,
+        "failpoint": "allocated",
+        "recovery_one": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 188416,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 188416
+        },
+        "recovery_two": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "target_mapping_visible": false,
+        "uncommitted_tail_after_recovery_bytes": 0,
+        "uncommitted_tail_before_recovery_bytes": 188416
+      },
+      {
+        "crash_epoch": 2,
+        "crash_root_entry_count": 255,
+        "exact_committed_state_match": true,
+        "expected_committed": false,
+        "failpoint": "children_written",
+        "recovery_one": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 188416,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 188416
+        },
+        "recovery_two": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "target_mapping_visible": false,
+        "uncommitted_tail_after_recovery_bytes": 0,
+        "uncommitted_tail_before_recovery_bytes": 188416
+      },
+      {
+        "crash_epoch": 2,
+        "crash_root_entry_count": 255,
+        "exact_committed_state_match": true,
+        "expected_committed": false,
+        "failpoint": "parent_written",
+        "recovery_one": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 188416,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 188416
+        },
+        "recovery_two": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "target_mapping_visible": false,
+        "uncommitted_tail_after_recovery_bytes": 0,
+        "uncommitted_tail_before_recovery_bytes": 188416
+      },
+      {
+        "crash_epoch": 2,
+        "crash_root_entry_count": 255,
+        "exact_committed_state_match": true,
+        "expected_committed": false,
+        "failpoint": "dependencies_synced",
+        "recovery_one": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 188416,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 188416
+        },
+        "recovery_two": {
+          "committed_epoch": 2,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "target_mapping_visible": false,
+        "uncommitted_tail_after_recovery_bytes": 0,
+        "uncommitted_tail_before_recovery_bytes": 188416
+      },
+      {
+        "crash_epoch": 3,
+        "crash_root_entry_count": 256,
+        "exact_committed_state_match": true,
+        "expected_committed": true,
+        "failpoint": "committed",
+        "recovery_one": {
+          "committed_epoch": 3,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "recovery_two": {
+          "committed_epoch": 3,
+          "frontier_superblock_preads": 2,
+          "generation_pages_scanned": 0,
+          "logical_work": 0,
+          "mapping_nodes_scanned": 0,
+          "physical_truncated_bytes": 0,
+          "tail_after_bytes": 0,
+          "tail_before_bytes": 0
+        },
+        "target_mapping_visible": true,
+        "uncommitted_tail_after_recovery_bytes": 0,
+        "uncommitted_tail_before_recovery_bytes": 0
+      }
+    ],
+    "target_segment_id": 18374686479671623680
+  },
+  "encoding_sweep": {
+    "fixed_effective_fanout": 256,
+    "fixed_node_padding_bytes": 1993,
+    "fixed_node_used_bytes": 2103,
+    "fixed_width": [
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000000000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000000000000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000000000000000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 1000000000000000000,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      },
+      {
+        "entry_count": 256,
+        "page_bytes": 4096,
+        "pointer_base": 18446744073709551360,
+        "round_trip_exact": true,
+        "used_bytes": 2103
+      }
+    ],
+    "json_control": [
+      {
+        "first_failing_payload_bytes": null,
+        "full_fanout_fits": true,
+        "full_fanout_payload_bytes": 2729,
+        "max_entries_that_fit": 256,
+        "max_fitting_payload_bytes": 2729,
+        "pointer_base": 1000
+      },
+      {
+        "first_failing_payload_bytes": null,
+        "full_fanout_fits": true,
+        "full_fanout_payload_bytes": 3497,
+        "max_entries_that_fit": 256,
+        "max_fitting_payload_bytes": 3497,
+        "pointer_base": 1000000
+      },
+      {
+        "first_failing_payload_bytes": 4078,
+        "full_fanout_fits": false,
+        "full_fanout_payload_bytes": 4265,
+        "max_entries_that_fit": 244,
+        "max_fitting_payload_bytes": 4061,
+        "pointer_base": 1000000000
+      },
+      {
+        "first_failing_payload_bytes": 4073,
+        "full_fanout_fits": false,
+        "full_fanout_payload_bytes": 5033,
+        "max_entries_that_fit": 207,
+        "max_fitting_payload_bytes": 4053,
+        "pointer_base": 1000000000000
+      },
+      {
+        "first_failing_payload_bytes": 4076,
+        "full_fanout_fits": false,
+        "full_fanout_payload_bytes": 5801,
+        "max_entries_that_fit": 180,
+        "max_fitting_payload_bytes": 4053,
+        "pointer_base": 1000000000000000
+      },
+      {
+        "first_failing_payload_bytes": 4073,
+        "full_fanout_fits": false,
+        "full_fanout_payload_bytes": 6569,
+        "max_entries_that_fit": 159,
+        "max_fitting_payload_bytes": 4047,
+        "pointer_base": 1000000000000000000
+      },
+      {
+        "first_failing_payload_bytes": 4098,
+        "full_fanout_fits": false,
+        "full_fanout_payload_bytes": 6825,
+        "max_entries_that_fit": 154,
+        "max_fitting_payload_bytes": 4071,
+        "pointer_base": 18446744073709551360
+      }
+    ],
+    "json_min_effective_fanout": 154,
+    "max_json_payload_bytes": 4072,
+    "pointer_bases": [
+      1000,
+      1000000,
+      1000000000,
+      1000000000000,
+      1000000000000000,
+      1000000000000000000,
+      18446744073709551360
+    ],
+    "radix_fanout": 256
+  },
+  "experiment": "v0.31_fixed_width_radix_nodes",
+  "first_principle": "a fixed-radix node should have physical capacity determined only by its radix fanout, not by textual serialization length or pointer magnitude. Because a node has exactly 256 possible next-byte edges, a 256-bit occupancy bitmap plus 256 fixed 64-bit pointer slots eliminates the need for node splitting altogether.",
+  "hypothesis_under_test": "replacing variable-width JSON radix nodes with one-page fixed-width 256-slot nodes will preserve the integrated v0.30 publication/recovery protocol while making full fanout fit independently of uint64 pointer magnitude and preventing recursive split cascades.",
+  "observe": "v0.30's radix has a semantic fanout of exactly 256, but its JSON node encoding is variable-width. The number of legal edges that fit one 4096-byte page therefore falls as physical pointer values gain decimal digits, creating a latent representation-driven overflow before semantic fanout is exhausted.",
+  "prediction": "the JSON control must lose effective fanout below 256 at sufficiently large pointer magnitudes, while the fixed-width codec must round-trip all 256 entries at every tested magnitude. A real root transition from 255 to 256 entries must require zero splits, one bounded eight-node radix path update, at most 46 appended pages, two fsync barriers, and exact pre/post committed images under SIGKILL after allocation, child writes, parent write, dependency fsync, and committed superblock publication. Recovery must remain frontier-derived with zero generation scan, zero mapping scan, and zero logical redo.",
+  "result": "survives only if the fixed-width node retains true 256-way physical fanout and the dense real-file crash matrix remains exact without splits or scan-based repair. This is not a claim of hardware power-loss safety, arbitrary multi-writer correctness, device-I/O bounds, production performance, or an address space beyond fixed uint64 pointers.",
+  "semantic_guard": {
+    "all_derived_fresh": true,
+    "full_assembly_equal": true,
+    "head_index_equal": true,
+    "materialization_equal": true,
+    "membership_equal": true,
+    "partial_assembly_equal": true
+  }
+}
