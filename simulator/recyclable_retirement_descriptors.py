@@ -268,7 +268,7 @@ def run_real_recycling_cycles() -> dict[str, Any]:
         second_reuse: dict[str, Any] | None = None
         second_reuse_index: int | None = None
         second_interval_enqueues: list[dict[str, Any]] = []
-        for index in range(129, 257):
+        for index in range(129, 258):
             trace = store.insert(f"k-{index:03d}")
             if trace.retirement_descriptors_enqueued:
                 row = trace.to_dict()
@@ -289,7 +289,7 @@ def run_real_recycling_cycles() -> dict[str, Any]:
         if second_reuse is None:
             _fail(
                 "second post-drain migration did not enqueue retirement",
-                interval=[129, 256],
+                interval=[129, 257],
                 interval_enqueues=second_interval_enqueues,
                 snapshot=after_second,
                 first_reuse=first_reuse,
@@ -355,7 +355,7 @@ def run_real_recycling_cycles() -> dict[str, Any]:
                 trace=second_reuse,
             )
 
-        for index in range(257):
+        for index in range(258):
             lookup = store.lookup(f"k-{index:03d}")
             if not lookup.found:
                 _fail(
@@ -397,5 +397,5 @@ def run_real_recycling_cycles() -> dict[str, Any]:
             "descriptor_pool_count_after_five_generations": int(
                 after_second["descriptor_pool_count"]
             ),
-            "all_257_keys_visible": True,
+            "all_258_keys_visible": True,
         }

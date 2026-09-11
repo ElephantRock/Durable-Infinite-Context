@@ -6,6 +6,8 @@ from pathlib import Path
 from simulator.normalized_membership import run_v016_normalized_case
 from simulator.recyclable_retirement_crash_matrices import (
     DEQUEUE_RECYCLE_FAILPOINTS,
+    FRESH_EMPTY_FAILPOINTS,
+    FRESH_NONEMPTY_FAILPOINTS,
     PARTIAL_RECLAIM_FAILPOINTS,
     REUSE_EMPTY_FAILPOINTS,
     REUSE_NONEMPTY_FAILPOINTS,
@@ -86,14 +88,16 @@ def run() -> dict:
         raise AssertionError("descriptor pool grew with completed-generation history")
     if not cycles["stale_reference"]["stale_reference_rejected"]:
         raise AssertionError("tagged reference failed to reject ABA-style stale identity")
-    if not cycles["all_257_keys_visible"]:
+    if not cycles["all_258_keys_visible"]:
         raise AssertionError("real v0.35 cycle lost live primary keys")
 
+    _require_crash_matrix(crashes["fresh_empty_queue"], FRESH_EMPTY_FAILPOINTS)
+    _require_crash_matrix(crashes["fresh_nonempty_queue"], FRESH_NONEMPTY_FAILPOINTS)
     _require_crash_matrix(crashes["empty_queue_reuse"], REUSE_EMPTY_FAILPOINTS)
     _require_crash_matrix(crashes["nonempty_queue_reuse"], REUSE_NONEMPTY_FAILPOINTS)
     _require_crash_matrix(crashes["partial_head"], PARTIAL_RECLAIM_FAILPOINTS)
     _require_crash_matrix(crashes["dequeue_to_free"], DEQUEUE_RECYCLE_FAILPOINTS)
-    if int(crashes["case_count"]) != 20:
+    if int(crashes["case_count"]) != 29:
         raise AssertionError("v0.35 crash matrix count drifted")
     for name in ("partial_head", "dequeue_to_free"):
         if not crashes[name]["all_live_keys_visible"]:
@@ -134,8 +138,8 @@ def run() -> dict:
             "pool should serve later generation retirements with zero new descriptor-page append, a "
             "non-empty enqueue should remain bounded by one free-head read plus one queue-tail read, the "
             "old `(page, incarnation)` identity should be rejected after the same page is reused, and "
-            "SIGKILL around tagged partial update, free publication, reuse, and tail linking must expose "
-            "exact pre/post committed state."
+            "SIGKILL around fresh tagged publication, tagged partial update, free publication, reuse, "
+            "and tail linking must expose exact pre/post committed state."
         ),
         "result": (
             "survives only if descriptor storage stops following completed-generation history after a "

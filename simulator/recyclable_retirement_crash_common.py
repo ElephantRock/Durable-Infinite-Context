@@ -80,6 +80,26 @@ def drain_all(store: RecyclableRetirementDescriptorPrimaryStore) -> None:
         store.reclaim_step(budget=2)
 
 
+def build_fresh_empty_fixture(path: Path) -> None:
+    store = RecyclableRetirementDescriptorPrimaryStore(str(path))
+    store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=512)
+    for index in range(16):
+        store.insert(f"k-{index:03d}")
+    queue = store.retirement_queue_snapshot()
+    if queue["queue_count"] != 0 or queue["descriptor_free_count"] != 0:
+        raise AssertionError("fresh empty fixture already owns a retirement descriptor")
+
+
+def build_fresh_nonempty_fixture(path: Path) -> None:
+    store = RecyclableRetirementDescriptorPrimaryStore(str(path))
+    store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=512)
+    for index in range(32):
+        store.insert(f"k-{index:03d}")
+    queue = store.retirement_queue_snapshot()
+    if queue["queue_count"] != 1 or queue["descriptor_free_count"] != 0:
+        raise AssertionError("fresh non-empty fixture has wrong queue/free depth")
+
+
 def build_empty_reuse_fixture(path: Path) -> None:
     store = RecyclableRetirementDescriptorPrimaryStore(str(path))
     store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=512)
@@ -97,7 +117,7 @@ def build_nonempty_reuse_fixture(path: Path) -> None:
     build_empty_reuse_fixture(path)
     store = RecyclableRetirementDescriptorPrimaryStore(str(path))
     store.insert("k-128")
-    for index in range(129, 256):
+    for index in range(129, 257):
         store.insert(f"k-{index:03d}")
     queue = store.retirement_queue_snapshot()
     if queue["queue_count"] != 1 or queue["descriptor_free_count"] != 2:

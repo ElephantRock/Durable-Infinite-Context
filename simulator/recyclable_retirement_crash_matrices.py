@@ -7,6 +7,8 @@ from typing import Any, Callable
 from simulator.recyclable_retirement_crash_common import (
     build_dequeue_fixture,
     build_empty_reuse_fixture,
+    build_fresh_empty_fixture,
+    build_fresh_nonempty_fixture,
     build_nonempty_reuse_fixture,
     build_partial_reclaim_fixture,
     recover_twice,
@@ -19,6 +21,19 @@ from storage.recyclable_retirement_descriptor_primary import (
     RecyclableRetirementDescriptorPrimaryStore,
 )
 
+FRESH_EMPTY_FAILPOINTS = (
+    "retirement_descriptor_written",
+    "pages_written",
+    "data_synced",
+    "committed",
+)
+FRESH_NONEMPTY_FAILPOINTS = (
+    "retirement_descriptor_written",
+    "retirement_tail_linked",
+    "pages_written",
+    "data_synced",
+    "committed",
+)
 REUSE_EMPTY_FAILPOINTS = (
     "retirement_descriptor_reused",
     "pages_written",
@@ -56,6 +71,8 @@ def _run_insert_matrix(
     keys_before: tuple[str, ...],
     failpoints: tuple[str, ...],
     prefix: str,
+    expected_reuses: int,
+    expected_descriptor_pages_appended: int,
 ) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
         directory = Path(tmp)
@@ -72,10 +89,10 @@ def _run_insert_matrix(
         post = semantic_state(clean, keys)
         if clean_trace.retirement_descriptors_enqueued != 1:
             raise AssertionError("clean v0.35 enqueue did not retire one generation")
-        if clean_trace.retirement_descriptor_reuses != 1:
-            raise AssertionError("clean v0.35 enqueue did not reuse a descriptor")
-        if clean_trace.retirement_descriptor_pages_appended != 0:
-            raise AssertionError("clean recycled enqueue appended descriptor pages")
+        if clean_trace.retirement_descriptor_reuses != expected_reuses:
+            raise AssertionError("clean v0.35 enqueue descriptor reuse count drifted")
+        if clean_trace.retirement_descriptor_pages_appended != expected_descriptor_pages_appended:
+            raise AssertionError("clean v0.35 enqueue descriptor append count drifted")
 
         rows: list[dict[str, Any]] = []
         for failpoint in failpoints:
@@ -187,19 +204,41 @@ def _run_reclaim_matrix(
 
 
 def run_recycling_crash_matrices() -> dict[str, Any]:
+    fresh_empty = _run_insert_matrix(
+        fixture_builder=build_fresh_empty_fixture,
+        trigger_key="k-016",
+        keys_before=tuple(f"k-{index:03d}" for index in range(16)),
+        failpoints=FRESH_EMPTY_FAILPOINTS,
+        prefix="dic-v035-fresh-empty-crash-",
+        expected_reuses=0,
+        expected_descriptor_pages_appended=2,
+    )
+    fresh_nonempty = _run_insert_matrix(
+        fixture_builder=build_fresh_nonempty_fixture,
+        trigger_key="k-032",
+        keys_before=tuple(f"k-{index:03d}" for index in range(32)),
+        failpoints=FRESH_NONEMPTY_FAILPOINTS,
+        prefix="dic-v035-fresh-nonempty-crash-",
+        expected_reuses=0,
+        expected_descriptor_pages_appended=2,
+    )
     empty_reuse = _run_insert_matrix(
         fixture_builder=build_empty_reuse_fixture,
         trigger_key="k-128",
         keys_before=tuple(f"k-{index:03d}" for index in range(128)),
         failpoints=REUSE_EMPTY_FAILPOINTS,
         prefix="dic-v035-empty-reuse-crash-",
+        expected_reuses=1,
+        expected_descriptor_pages_appended=0,
     )
     nonempty_reuse = _run_insert_matrix(
         fixture_builder=build_nonempty_reuse_fixture,
-        trigger_key="k-256",
-        keys_before=tuple(f"k-{index:03d}" for index in range(256)),
+        trigger_key="k-257",
+        keys_before=tuple(f"k-{index:03d}" for index in range(257)),
         failpoints=REUSE_NONEMPTY_FAILPOINTS,
         prefix="dic-v035-nonempty-reuse-crash-",
+        expected_reuses=1,
+        expected_descriptor_pages_appended=0,
     )
     partial = _run_reclaim_matrix(
         fixture_builder=build_partial_reclaim_fixture,
@@ -216,11 +255,15 @@ def run_recycling_crash_matrices() -> dict[str, Any]:
         expect_recycled_descriptor=True,
     )
     return {
+        "fresh_empty_queue": fresh_empty,
+        "fresh_nonempty_queue": fresh_nonempty,
         "empty_queue_reuse": empty_reuse,
         "nonempty_queue_reuse": nonempty_reuse,
         "partial_head": partial,
         "dequeue_to_free": dequeue,
-        "case_count": int(empty_reuse["case_count"])
+        "case_count": int(fresh_empty["case_count"])
+        + int(fresh_nonempty["case_count"])
+        + int(empty_reuse["case_count"])
         + int(nonempty_reuse["case_count"])
         + int(partial["case_count"])
         + int(dequeue["case_count"]),
