@@ -1,0 +1,197 @@
+{
+  "boundary_control": {
+    "capacities": [
+      32,
+      128,
+      2048,
+      131072,
+      4194304
+    ],
+    "max_alignment_padding_pages": 15,
+    "rows": [
+      {
+        "aligned_new_base_page": 16,
+        "aligned_new_first_segment": 1,
+        "aligned_shares_boundary_segment": false,
+        "alignment_padding_pages": 7,
+        "old_capacity": 32,
+        "old_generation_pages": 9,
+        "old_last_segment": 0,
+        "unaligned_new_base_page": 9,
+        "unaligned_new_first_segment": 0,
+        "unaligned_shares_boundary_segment": true
+      },
+      {
+        "aligned_new_base_page": 48,
+        "aligned_new_first_segment": 3,
+        "aligned_shares_boundary_segment": false,
+        "alignment_padding_pages": 15,
+        "old_capacity": 128,
+        "old_generation_pages": 33,
+        "old_last_segment": 2,
+        "unaligned_new_base_page": 33,
+        "unaligned_new_first_segment": 2,
+        "unaligned_shares_boundary_segment": true
+      },
+      {
+        "aligned_new_base_page": 528,
+        "aligned_new_first_segment": 33,
+        "aligned_shares_boundary_segment": false,
+        "alignment_padding_pages": 15,
+        "old_capacity": 2048,
+        "old_generation_pages": 513,
+        "old_last_segment": 32,
+        "unaligned_new_base_page": 513,
+        "unaligned_new_first_segment": 32,
+        "unaligned_shares_boundary_segment": true
+      },
+      {
+        "aligned_new_base_page": 32784,
+        "aligned_new_first_segment": 2049,
+        "aligned_shares_boundary_segment": false,
+        "alignment_padding_pages": 15,
+        "old_capacity": 131072,
+        "old_generation_pages": 32769,
+        "old_last_segment": 2048,
+        "unaligned_new_base_page": 32769,
+        "unaligned_new_first_segment": 2048,
+        "unaligned_shares_boundary_segment": true
+      },
+      {
+        "aligned_new_base_page": 1048592,
+        "aligned_new_first_segment": 65537,
+        "aligned_shares_boundary_segment": false,
+        "alignment_padding_pages": 15,
+        "old_capacity": 4194304,
+        "old_generation_pages": 1048577,
+        "old_last_segment": 65536,
+        "unaligned_new_base_page": 1048577,
+        "unaligned_new_first_segment": 65536,
+        "unaligned_shares_boundary_segment": true
+      }
+    ],
+    "segment_pages": 16
+  },
+  "experiment": "v0.33_generation_boundary_reclamation",
+  "first_principle": "a physical segment may be reclaimed as one ownership unit only when logical-generation ownership is disjoint at segment granularity. The disjointness mechanism must not require a capacity-sized ownership walk or an O(K) serialized page manifest.",
+  "hypothesis_under_test": "aligning every new logical generation base to the next 16-page mapping boundary will eliminate mixed-generation segments with at most 15 unused logical page ids per generation. Because physical segments remain lazily append-mapped, those logical gaps should not create capacity-scaled physical allocation. The v0.32 owner chain can then be driven directly by real migration completion and safely reuse reclaimed extents after the fixed 32-page scrub.",
+  "insert_crash_matrices": {
+    "first_migration": {
+      "all_exact_committed_state_match": true,
+      "all_recovery_scan_free": true,
+      "all_second_recovery_idempotent": true,
+      "case_count": 4,
+      "clean_trace": {
+        "data_page_scrub_pwrites": 0,
+        "fresh_physical_extents": 1,
+        "fsyncs": 2,
+        "generation_alignment_padding_pages": 7,
+        "lifecycle_header_preads": 0,
+        "lifecycle_header_pwrites": 1,
+        "migration_completed": true,
+        "migration_rows_moved": 16,
+        "migration_source_slots_scanned": 40,
+        "migration_started": true,
+        "new_segments_allocated": 1,
+        "physical_bytes_appended": 139264,
+        "physical_pages_appended": 34,
+        "radix_node_pwrites": 1,
+        "reused_free_extents": 0
+      },
+      "failpoints": [
+        "allocated",
+        "pages_written",
+        "data_synced",
+        "committed"
+      ],
+      "max_tail_after_recovery_bytes": 0,
+      "max_tail_before_recovery_bytes": 139264
+    },
+    "reuse_migration": {
+      "all_exact_committed_state_match": true,
+      "all_recovery_scan_free": true,
+      "all_second_recovery_idempotent": true,
+      "case_count": 4,
+      "clean_trace": {
+        "data_page_scrub_pwrites": 32,
+        "fresh_physical_extents": 1,
+        "fsyncs": 2,
+        "generation_alignment_padding_pages": 15,
+        "lifecycle_header_preads": 4,
+        "lifecycle_header_pwrites": 2,
+        "migration_completed": false,
+        "migration_rows_moved": 32,
+        "migration_source_slots_scanned": 64,
+        "migration_started": true,
+        "new_segments_allocated": 2,
+        "physical_bytes_appended": 139264,
+        "physical_pages_appended": 34,
+        "radix_node_pwrites": 2,
+        "reused_free_extents": 1
+      },
+      "failpoints": [
+        "reused_extent_scrubbed",
+        "pages_written",
+        "data_synced",
+        "committed"
+      ],
+      "max_tail_after_recovery_bytes": 0,
+      "max_tail_before_recovery_bytes": 139264
+    }
+  },
+  "observe": "v0.32's whole-segment reclamation is not directly composable with the real primary because back-to-back generation allocation can place the next generation inside the predecessor's final 16-page mapping segment. Reclaiming by generation would then risk freeing a physical segment that still contains logical pages reserved for a live generation.",
+  "prediction": "the unaligned control must share a boundary segment at every tested capacity, while the aligned candidate must share none and use fewer than 16 padding page ids. Two real migration cycles must preserve all keys, publish retired ownership without a generation scan, reclaim with zero appended pages under fixed budgets, and reuse a retired extent only after a fixed 32-page scrub. Process death before committed-superblock publication must expose the exact pre-state; death after publication must expose the exact post-state; recovery must remain frontier-derived and scan-free.",
+  "real_generation_cycles": {
+    "all_34_keys_visible": true,
+    "first_alignment_padding_pages": 7,
+    "first_physical_pages_appended": 34,
+    "first_radix_node_pwrites": 1,
+    "first_reclaim_step_count": 1,
+    "free_after_first_reclaim": 1,
+    "max_reclaim_pages_appended": 0,
+    "max_reclaim_segments_per_step": 1,
+    "second_active_current_first_segment": 3,
+    "second_active_old_last_segment": 2,
+    "second_alignment_padding_pages": 15,
+    "second_completion_physical_pages_appended": 0,
+    "second_reclaim_step_count": 1,
+    "second_reused_free_extents": 1,
+    "second_scrub_pwrites": 32,
+    "second_trigger_physical_pages_appended": 34
+  },
+  "reclaim_crash_matrix": {
+    "all_exact_committed_state_match": true,
+    "all_live_keys_visible": true,
+    "all_recovery_scan_free": true,
+    "case_count": 4,
+    "clean_trace": {
+      "free_count": 1,
+      "fsyncs": 2,
+      "generation_pages_scanned": 0,
+      "lifecycle_header_preads": 4,
+      "lifecycle_header_pwrites": 1,
+      "logical_redo": 0,
+      "mapping_nodes_scanned": 0,
+      "physical_pages_appended": 0,
+      "radix_node_pwrites": 1,
+      "reclaimed_segments": 1,
+      "remaining_segments": 0,
+      "requested_budget": 1
+    },
+    "failpoints": [
+      "mapping_unlinked",
+      "free_header_written",
+      "dependencies_synced",
+      "committed"
+    ]
+  },
+  "result": "survives only if address-space alignment removes the mixed-generation ownership hazard in the real primary while retaining bounded per-step reclamation and exact process-crash visibility. The current candidate intentionally supports one retirement backlog at a time and does not claim hardware power-loss safety, metadata-node pruning, filesystem block deallocation, or arbitrary multi-writer/distributed correctness.",
+  "semantic_guard": {
+    "all_derived_fresh": true,
+    "full_assembly_equal": true,
+    "head_index_equal": true,
+    "materialization_equal": true,
+    "membership_equal": true,
+    "partial_assembly_equal": true
+  }
+}
