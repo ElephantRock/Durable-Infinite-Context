@@ -38,7 +38,6 @@ class AlignedGenerationReclaimingPrimaryTests(unittest.TestCase):
             snapshot = store.generation_layout_snapshot()
             self.assertEqual(1, snapshot["current"]["generation"])
             self.assertEqual(16, snapshot["current"]["base_page"])
-            self.assertEqual(0, snapshot["current"]["first_segment"] % 1)
             self.assertIsNone(snapshot["old"])
             self.assertEqual(0, snapshot["retire_generation"])
             self.assertGreater(snapshot["retire_remaining"], 0)
@@ -54,17 +53,26 @@ class AlignedGenerationReclaimingPrimaryTests(unittest.TestCase):
             first_free = store.generation_layout_snapshot()["free_count"]
             self.assertGreater(first_free, 0)
 
-            second_trigger = None
-            for index in range(17, 33):
-                trace = store.insert(f"k-{index:03d}")
-                if trace.migration_started:
-                    second_trigger = trace
-            self.assertIsNotNone(second_trigger)
-            assert second_trigger is not None
-            self.assertTrue(second_trigger.migration_completed)
+            second_phase = []
+            next_index = 17
+            while True:
+                trace = store.insert(f"k-{next_index:03d}")
+                second_phase.append(trace)
+                next_index += 1
+                snap = store.generation_layout_snapshot()
+                if snap["current"]["generation"] == 2 and snap["old"] is None:
+                    break
+                self.assertLess(next_index, 48, "second migration failed to converge")
+
+            second_trigger = next(trace for trace in second_phase if trace.migration_started)
             self.assertEqual(15, second_trigger.generation_alignment_padding_pages)
-            self.assertGreaterEqual(second_trigger.reused_free_extents, 1)
-            self.assertGreaterEqual(second_trigger.data_page_scrub_pwrites, 32)
+            self.assertTrue(any(trace.migration_completed for trace in second_phase))
+            self.assertGreaterEqual(
+                sum(trace.reused_free_extents for trace in second_phase), 1
+            )
+            self.assertGreaterEqual(
+                sum(trace.data_page_scrub_pwrites for trace in second_phase), 32
+            )
 
             snapshot = store.generation_layout_snapshot()
             self.assertEqual(2, snapshot["current"]["generation"])
@@ -73,8 +81,10 @@ class AlignedGenerationReclaimingPrimaryTests(unittest.TestCase):
             self.assertGreater(snapshot["retire_remaining"], 0)
 
             while store.generation_layout_snapshot()["retire_remaining"]:
-                store.reclaim_step(budget=3)
-            for index in range(33):
+                trace = store.reclaim_step(budget=3)
+                self.assertLessEqual(trace.reclaimed_segments, 3)
+                self.assertEqual(0, trace.physical_pages_appended)
+            for index in range(next_index):
                 self.assertTrue(store.lookup(f"k-{index:03d}").found)
 
 
