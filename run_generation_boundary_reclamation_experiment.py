@@ -32,6 +32,47 @@ def _require_semantic_guard(row: dict) -> None:
         raise AssertionError("v0.16 semantic guard failed before v0.33 experiment")
 
 
+def _insert_matrix_summary(matrix: dict) -> dict:
+    rows = matrix["rows"]
+    return {
+        "failpoints": list(matrix["failpoints"]),
+        "case_count": int(matrix["case_count"]),
+        "all_exact_committed_state_match": bool(
+            matrix["all_exact_committed_state_match"]
+        ),
+        "all_recovery_scan_free": bool(matrix["all_recovery_scan_free"]),
+        "all_second_recovery_idempotent": bool(
+            matrix["all_second_recovery_idempotent"]
+        ),
+        "max_tail_before_recovery_bytes": max(
+            int(row["recovery_one"]["tail_before_bytes"]) for row in rows
+        ),
+        "max_tail_after_recovery_bytes": max(
+            int(row["recovery_one"]["tail_after_bytes"]) for row in rows
+        ),
+        "clean_trace": {
+            key: matrix["clean_trace"][key]
+            for key in (
+                "migration_started",
+                "migration_completed",
+                "migration_source_slots_scanned",
+                "migration_rows_moved",
+                "generation_alignment_padding_pages",
+                "new_segments_allocated",
+                "fresh_physical_extents",
+                "reused_free_extents",
+                "data_page_scrub_pwrites",
+                "physical_pages_appended",
+                "physical_bytes_appended",
+                "radix_node_pwrites",
+                "lifecycle_header_preads",
+                "lifecycle_header_pwrites",
+                "fsyncs",
+            )
+        },
+    }
+
+
 def run() -> dict:
     semantic_guard = run_v016_normalized_case(
         entity_count=128,
@@ -100,9 +141,72 @@ def run() -> dict:
             "partial_assembly_equal": semantic_guard["partial_assembly_equal"],
         },
         "boundary_control": control,
-        "real_generation_cycles": cycles,
-        "insert_crash_matrices": inserts,
-        "reclaim_crash_matrix": reclaim,
+        "real_generation_cycles": {
+            "first_alignment_padding_pages": int(
+                cycles["first_trigger"]["generation_alignment_padding_pages"]
+            ),
+            "first_physical_pages_appended": int(
+                cycles["first_trigger"]["physical_pages_appended"]
+            ),
+            "first_radix_node_pwrites": int(
+                cycles["first_trigger"]["radix_node_pwrites"]
+            ),
+            "first_reclaim_step_count": len(cycles["first_reclaim_steps"]),
+            "free_after_first_reclaim": int(cycles["free_after_first_reclaim"]),
+            "second_alignment_padding_pages": int(
+                cycles["second_trigger"]["generation_alignment_padding_pages"]
+            ),
+            "second_active_old_last_segment": int(
+                cycles["second_active_layout"]["old"]["last_segment"]
+            ),
+            "second_active_current_first_segment": int(
+                cycles["second_active_layout"]["current"]["first_segment"]
+            ),
+            "second_trigger_physical_pages_appended": int(
+                cycles["second_trigger"]["physical_pages_appended"]
+            ),
+            "second_completion_physical_pages_appended": int(
+                cycles["second_completion"]["physical_pages_appended"]
+            ),
+            "second_reused_free_extents": int(cycles["second_reused_free_extents"]),
+            "second_scrub_pwrites": int(cycles["second_scrub_pwrites"]),
+            "second_reclaim_step_count": len(cycles["second_reclaim_steps"]),
+            "max_reclaim_segments_per_step": int(
+                cycles["max_reclaim_segments_per_step"]
+            ),
+            "max_reclaim_pages_appended": int(cycles["max_reclaim_pages_appended"]),
+            "all_34_keys_visible": bool(cycles["all_34_keys_visible"]),
+        },
+        "insert_crash_matrices": {
+            "first_migration": _insert_matrix_summary(first),
+            "reuse_migration": _insert_matrix_summary(reuse),
+        },
+        "reclaim_crash_matrix": {
+            "failpoints": list(reclaim["failpoints"]),
+            "case_count": int(reclaim["case_count"]),
+            "all_exact_committed_state_match": bool(
+                reclaim["all_exact_committed_state_match"]
+            ),
+            "all_live_keys_visible": bool(reclaim["all_live_keys_visible"]),
+            "all_recovery_scan_free": bool(reclaim["all_recovery_scan_free"]),
+            "clean_trace": {
+                key: reclaim["clean_trace"][key]
+                for key in (
+                    "requested_budget",
+                    "reclaimed_segments",
+                    "remaining_segments",
+                    "free_count",
+                    "radix_node_pwrites",
+                    "lifecycle_header_preads",
+                    "lifecycle_header_pwrites",
+                    "physical_pages_appended",
+                    "fsyncs",
+                    "generation_pages_scanned",
+                    "mapping_nodes_scanned",
+                    "logical_redo",
+                )
+            },
+        },
         "observe": (
             "v0.32's whole-segment reclamation is not directly composable with the real primary "
             "because back-to-back generation allocation can place the next generation inside the "
