@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -7,7 +8,9 @@ from pathlib import Path
 from run_recyclable_retirement_descriptor_experiment import run
 
 ROOT = Path(__file__).resolve().parent
-RESULTS = ROOT / "recyclable_retirement_descriptor_results.json"
+FROZEN_RESULTS = ROOT / "recyclable_retirement_descriptor_results.json.gz"
+GENERATED_RESULTS = ROOT / "recyclable_retirement_descriptor_results.json"
+EXPECTED_GZIP_SHA256 = "b37f74697fdc1ce69752c2ae440d931d873dd2f6429ef5ffb172e81859641711"
 EXPECTED_SHA256 = "f571c4d986c1c1a5b85cb9b2e3fa89583c1eb3fab2fbcdfc36cbdd869f86802f"
 
 FRESH_EMPTY_FAILPOINTS = (
@@ -86,10 +89,14 @@ def _assert_matrix(matrix: dict, failpoints: tuple[str, ...], case_count: int) -
 
 
 def main() -> None:
-    committed = RESULTS.read_bytes()
+    frozen_compressed = FROZEN_RESULTS.read_bytes()
+    compressed_digest = hashlib.sha256(frozen_compressed).hexdigest()
+    if compressed_digest != EXPECTED_GZIP_SHA256:
+        raise AssertionError(f"v0.35 frozen gzip hash drifted: {compressed_digest}")
+    committed = gzip.decompress(frozen_compressed)
     digest = hashlib.sha256(committed).hexdigest()
     if digest != EXPECTED_SHA256:
-        raise AssertionError(f"v0.35 result hash drifted: {digest}")
+        raise AssertionError(f"v0.35 frozen result hash drifted: {digest}")
     payload = json.loads(committed)
 
     if payload["experiment"] != "v0.35_recyclable_retirement_descriptors":
@@ -277,6 +284,8 @@ def main() -> None:
         )
     if reproduced_bytes != committed:
         raise AssertionError("v0.35 executable reproduction is not byte-exact")
+    if GENERATED_RESULTS.read_bytes() != committed:
+        raise AssertionError("v0.35 generated result file differs from frozen evidence")
 
     print(
         "verified v0.35 recyclable retirement descriptors: "
