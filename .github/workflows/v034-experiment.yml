@@ -16,6 +16,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m unittest tests.test_queued_generation_reclaiming_primary -v
       - run: python run_retirement_queue_experiment.py
+      - run: python verify_retirement_queue_results.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
