@@ -4,6 +4,12 @@ import json
 from pathlib import Path
 
 from simulator.normalized_membership import run_v016_normalized_case
+from simulator.recyclable_retirement_crash_matrices import (
+    DEQUEUE_RECYCLE_FAILPOINTS,
+    REUSE_EMPTY_FAILPOINTS,
+    REUSE_NONEMPTY_FAILPOINTS,
+    run_recycling_crash_matrices,
+)
 from simulator.recyclable_retirement_descriptors import (
     run_descriptor_storage_controls,
     run_real_recycling_cycles,
@@ -26,6 +32,17 @@ def _require_semantic_guard(row: dict) -> None:
         raise AssertionError("v0.16 semantic guard failed before v0.35 experiment")
 
 
+def _require_crash_matrix(matrix: dict, expected_failpoints: tuple[str, ...]) -> None:
+    if matrix["failpoints"] != list(expected_failpoints):
+        raise AssertionError("v0.35 crash failpoint set drifted")
+    if not matrix["all_exact_committed_state_match"]:
+        raise AssertionError("v0.35 crash matrix exposed mixed committed state")
+    if not matrix["all_recovery_scan_free"]:
+        raise AssertionError("v0.35 crash recovery introduced scan-based repair")
+    if not matrix["all_second_recovery_idempotent"]:
+        raise AssertionError("v0.35 second recovery lost idempotence")
+
+
 def run() -> dict:
     semantic_guard = run_v016_normalized_case(
         entity_count=128,
@@ -36,6 +53,7 @@ def run() -> dict:
     _require_semantic_guard(semantic_guard)
     controls = run_descriptor_storage_controls()
     cycles = run_real_recycling_cycles()
+    crashes = run_recycling_crash_matrices()
 
     if cycles["initial_descriptor_pages_appended"] != 6:
         raise AssertionError("three-descriptor initial pool did not append six pages")
@@ -47,6 +65,14 @@ def run() -> dict:
         raise AssertionError("tagged reference failed to reject ABA-style stale identity")
     if not cycles["all_257_keys_visible"]:
         raise AssertionError("real v0.35 cycle lost live primary keys")
+
+    _require_crash_matrix(crashes["empty_queue_reuse"], REUSE_EMPTY_FAILPOINTS)
+    _require_crash_matrix(crashes["nonempty_queue_reuse"], REUSE_NONEMPTY_FAILPOINTS)
+    _require_crash_matrix(crashes["dequeue_to_free"], DEQUEUE_RECYCLE_FAILPOINTS)
+    if int(crashes["case_count"]) != 15:
+        raise AssertionError("v0.35 crash matrix count drifted")
+    if not crashes["dequeue_to_free"]["all_live_keys_visible"]:
+        raise AssertionError("v0.35 dequeue crash hid live primary keys")
 
     out = {
         "experiment": "v0.35_recyclable_retirement_descriptors",
@@ -60,6 +86,7 @@ def run() -> dict:
         },
         "storage_controls": controls,
         "real_recycling_cycles": cycles,
+        "crash_matrices": crashes,
         "observe": (
             "v0.34 bounds queue publication and reclaim work but leaves each dequeued dual-copy "
             "retirement descriptor permanently allocated, so descriptor storage grows with completed "
@@ -80,12 +107,14 @@ def run() -> dict:
             "an append-only control grows two pages per completed generation, while a serial recyclable "
             "pool stays at one dual-copy descriptor. In the real primary, the initial three-descriptor "
             "pool should serve later generation retirements with zero new descriptor-page append, a "
-            "non-empty enqueue should remain bounded by one free-head read plus one queue-tail read, and "
-            "the old `(page, incarnation)` identity should be rejected after the same page is reused."
+            "non-empty enqueue should remain bounded by one free-head read plus one queue-tail read, the "
+            "old `(page, incarnation)` identity should be rejected after the same page is reused, and "
+            "SIGKILL around free publication/reuse/tail linking must expose exact pre/post committed state."
         ),
         "result": (
-            "initial real-primary and ABA controls only; process-crash recycling matrices remain required "
-            "before v0.35 can survive its full falsification gate."
+            "survives only if descriptor storage stops following completed-generation history after a "
+            "sufficient reusable pool exists, stale tagged references are rejected, foreground reuse is "
+            "head-local, and all fixed process-crash cases recover without descriptor-history scans."
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
