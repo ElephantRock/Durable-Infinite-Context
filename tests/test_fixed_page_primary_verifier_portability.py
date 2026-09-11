@@ -69,6 +69,22 @@ class FixedPagePrimaryVerifierPortabilityTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             _require_portable_allocation_observations(recorded, reproduced)
 
+    def test_fractional_allocation_observation_is_rejected(self) -> None:
+        recorded = {
+            "row": {
+                "file_size_bytes": 4096,
+                "allocated_bytes": 4096,
+            }
+        }
+        reproduced = {
+            "row": {
+                "file_size_bytes": 4096,
+                "allocated_bytes": 512.5,
+            }
+        }
+        with self.assertRaises(AssertionError):
+            _require_portable_allocation_observations(recorded, reproduced)
+
 
 if __name__ == "__main__":
     unittest.main()
