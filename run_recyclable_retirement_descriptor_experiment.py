@@ -6,6 +6,7 @@ from pathlib import Path
 from simulator.normalized_membership import run_v016_normalized_case
 from simulator.recyclable_retirement_crash_matrices import (
     DEQUEUE_RECYCLE_FAILPOINTS,
+    PARTIAL_RECLAIM_FAILPOINTS,
     REUSE_EMPTY_FAILPOINTS,
     REUSE_NONEMPTY_FAILPOINTS,
     run_recycling_crash_matrices,
@@ -68,11 +69,13 @@ def run() -> dict:
 
     _require_crash_matrix(crashes["empty_queue_reuse"], REUSE_EMPTY_FAILPOINTS)
     _require_crash_matrix(crashes["nonempty_queue_reuse"], REUSE_NONEMPTY_FAILPOINTS)
+    _require_crash_matrix(crashes["partial_head"], PARTIAL_RECLAIM_FAILPOINTS)
     _require_crash_matrix(crashes["dequeue_to_free"], DEQUEUE_RECYCLE_FAILPOINTS)
-    if int(crashes["case_count"]) != 15:
+    if int(crashes["case_count"]) != 20:
         raise AssertionError("v0.35 crash matrix count drifted")
-    if not crashes["dequeue_to_free"]["all_live_keys_visible"]:
-        raise AssertionError("v0.35 dequeue crash hid live primary keys")
+    for name in ("partial_head", "dequeue_to_free"):
+        if not crashes[name]["all_live_keys_visible"]:
+            raise AssertionError("v0.35 reclaim crash hid live primary keys")
 
     out = {
         "experiment": "v0.35_recyclable_retirement_descriptors",
@@ -109,7 +112,8 @@ def run() -> dict:
             "pool should serve later generation retirements with zero new descriptor-page append, a "
             "non-empty enqueue should remain bounded by one free-head read plus one queue-tail read, the "
             "old `(page, incarnation)` identity should be rejected after the same page is reused, and "
-            "SIGKILL around free publication/reuse/tail linking must expose exact pre/post committed state."
+            "SIGKILL around tagged partial update, free publication, reuse, and tail linking must expose "
+            "exact pre/post committed state."
         ),
         "result": (
             "survives only if descriptor storage stops following completed-generation history after a "
