@@ -1,0 +1,171 @@
+{
+  "budget_sweep": {
+    "backlog_counts": [
+      1,
+      8,
+      32,
+      64
+    ],
+    "budget": 3,
+    "global_max_lifecycle_preads_per_step": 12,
+    "global_max_lifecycle_pwrites_per_step": 3,
+    "global_max_physical_pages_appended_per_step": 0,
+    "global_max_radix_pwrites_per_step": 3,
+    "global_max_reclaimed_per_step": 3,
+    "rows": [
+      {
+        "final_free_count": 1,
+        "materialize_physical_pages_appended": 48,
+        "max_lifecycle_preads_per_step": 4,
+        "max_lifecycle_pwrites_per_step": 1,
+        "max_physical_pages_appended_per_step": 0,
+        "max_radix_pwrites_per_step": 1,
+        "max_reclaimed_per_step": 1,
+        "retired_segments": 1,
+        "step_count": 1
+      },
+      {
+        "final_free_count": 8,
+        "materialize_physical_pages_appended": 286,
+        "max_lifecycle_preads_per_step": 12,
+        "max_lifecycle_pwrites_per_step": 3,
+        "max_physical_pages_appended_per_step": 0,
+        "max_radix_pwrites_per_step": 3,
+        "max_reclaimed_per_step": 3,
+        "retired_segments": 8,
+        "step_count": 3
+      },
+      {
+        "final_free_count": 32,
+        "materialize_physical_pages_appended": 1102,
+        "max_lifecycle_preads_per_step": 12,
+        "max_lifecycle_pwrites_per_step": 3,
+        "max_physical_pages_appended_per_step": 0,
+        "max_radix_pwrites_per_step": 3,
+        "max_reclaimed_per_step": 3,
+        "retired_segments": 32,
+        "step_count": 11
+      },
+      {
+        "final_free_count": 64,
+        "materialize_physical_pages_appended": 2190,
+        "max_lifecycle_preads_per_step": 12,
+        "max_lifecycle_pwrites_per_step": 3,
+        "max_physical_pages_appended_per_step": 0,
+        "max_radix_pwrites_per_step": 3,
+        "max_reclaimed_per_step": 3,
+        "retired_segments": 64,
+        "step_count": 22
+      }
+    ]
+  },
+  "controls": {
+    "candidate_superblock_retirement_fields": [
+      "retire_generation",
+      "retire_cursor_page",
+      "retire_remaining",
+      "free_head_page",
+      "free_count"
+    ],
+    "capacity_rows": [
+      {
+        "candidate_reclaim_visits_per_step": 3,
+        "logical_generation_capacity": 1024,
+        "naive_capacity_walk_slots": 1024
+      },
+      {
+        "candidate_reclaim_visits_per_step": 3,
+        "logical_generation_capacity": 1048576,
+        "naive_capacity_walk_slots": 1048576
+      },
+      {
+        "candidate_reclaim_visits_per_step": 3,
+        "logical_generation_capacity": 1073741824,
+        "naive_capacity_walk_slots": 1073741824
+      },
+      {
+        "candidate_reclaim_visits_per_step": 3,
+        "logical_generation_capacity": 1099511627776,
+        "naive_capacity_walk_slots": 1099511627776
+      }
+    ],
+    "manifest_rows": [
+      {
+        "flat_manifest_bytes": 40,
+        "retired_segments": 1
+      },
+      {
+        "flat_manifest_bytes": 166,
+        "retired_segments": 8
+      },
+      {
+        "flat_manifest_bytes": 598,
+        "retired_segments": 32
+      },
+      {
+        "flat_manifest_bytes": 1174,
+        "retired_segments": 64
+      }
+    ]
+  },
+  "diagnosis": "retirement locality and reuse safety are distinct invariants. Intrusive ownership links can make cleanup proportional to an explicit fixed budget rather than generation capacity, but mapping-only reuse is insufficient because data-page validity is independent of the radix edge.",
+  "experiment": "v0.32_retired_generation_reclamation",
+  "first_principle": "retired implementation history must become unreachable before its physical extent is reused; foreground cleanup work must be bounded by an explicit budget rather than total history or generation capacity; and every byte that can become semantically visible under a new owner must either carry ownership/version identity or be invalidated before publication.",
+  "hypothesis_under_test": "dual-copy intrusive lifecycle headers plus a committed retirement cursor can reclaim at most B segments per step with no capacity/map scan, while a fixed 32-page scrub before reuse can prevent retired payload resurrection without allocating a new data extent.",
+  "observe": "v0.31 bounds radix-node representation, but committed physical segments remain reachable until lifecycle cleanup removes their mappings. A flat retired-segment manifest grows with retired materialization count, while a generation-capacity walk grows with logical capacity. A second hazard appears when a reclaimed extent is reused: valid old data-page records can become visible through a different logical mapping unless reuse invalidates the fixed data footprint.",
+  "prediction": "with B=3, reclaim work must remain at most three ownership visits, twelve lifecycle reads, three lifecycle writes, three leaf rewrites, zero appended pages, and two publication barriers for every tested backlog size. The unscrubbed control must expose a seeded valid retired record after reuse; the scrubbed candidate must expose none, reuse the same physical segment, and survive SIGKILL around unlink/free and scrub/remap/publication with exact committed lifecycle state and scan-free recovery.",
+  "reclaim_crash_matrix": {
+    "all_exact_committed_state_match": true,
+    "all_recovery_scan_free": true,
+    "all_second_recovery_idempotent": true,
+    "case_count": 4,
+    "clean_physical_pages_appended": 0,
+    "clean_reclaimed_segments": 2,
+    "failpoints": [
+      "mapping_unlinked",
+      "free_header_written",
+      "dependencies_synced",
+      "committed"
+    ]
+  },
+  "result": "survives only if cleanup locality is independent of backlog/capacity per step, stale-payload reuse is eliminated by fixed-footprint invalidation, and all reclaim/reuse process-crash cases preserve a single committed interpretation. This does not claim constant total cleanup work, physical block deallocation, metadata-node pruning, automatic alignment with every primary generation boundary, hardware power-loss safety, or arbitrary multi-writer/distributed correctness.",
+  "reuse_crash_matrix": {
+    "all_exact_committed_state_match": true,
+    "all_recovery_scan_free": true,
+    "all_retry_or_committed_reuse_exact": true,
+    "all_second_recovery_idempotent": true,
+    "case_count": 5,
+    "clean_data_page_scrub_pwrites": 32,
+    "clean_physical_pages_appended": 0,
+    "clean_radix_node_pwrites": 1,
+    "clean_reused_same_extent": true,
+    "failpoints": [
+      "data_scrubbed",
+      "mapping_written",
+      "owner_header_written",
+      "dependencies_synced",
+      "committed"
+    ]
+  },
+  "semantic_guard": {
+    "all_derived_fresh": true,
+    "full_assembly_equal": true,
+    "head_index_equal": true,
+    "materialization_equal": true,
+    "membership_equal": true,
+    "partial_assembly_equal": true
+  },
+  "stale_payload_control": {
+    "new_segment_id": 72623859790382949,
+    "old_segment_id": 72623859790382948,
+    "safe_data_page_scrub_pwrites": 32,
+    "safe_fsyncs": 2,
+    "safe_old_mapping_visible": false,
+    "safe_physical_pages_appended": 0,
+    "safe_radix_node_pwrites": 1,
+    "safe_reused_same_extent": true,
+    "safe_stale_payload_visible": false,
+    "unsafe_reused_same_extent": true,
+    "unsafe_stale_payload_visible": true
+  }
+}
