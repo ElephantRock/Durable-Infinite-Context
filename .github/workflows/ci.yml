@@ -40,6 +40,7 @@ jobs:
       - run: python run_retired_generation_reclamation_experiment.py
       - run: python run_generation_boundary_reclamation_experiment.py
       - run: python run_retirement_queue_experiment.py
+      - run: python run_recyclable_retirement_descriptor_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -197,4 +198,9 @@ jobs:
         with:
           name: v0.34-retirement-queue-results
           path: retirement_queue_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.35-recyclable-retirement-descriptor-results
+          path: recyclable_retirement_descriptor_results.json
           if-no-files-found: error
