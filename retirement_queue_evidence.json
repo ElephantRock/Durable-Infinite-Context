@@ -1,0 +1,60 @@
+{
+  "experiment": "v0.34_retirement_queue",
+  "initial_successful_gate": {
+    "workflow_name": "v0.34 experiment",
+    "run_number": 5,
+    "run_id": 34561502953,
+    "head_sha": "716de117f3d39ce9e373a9b9f449716bf33af624",
+    "artifact_id": 10184464408,
+    "artifact_name": "v0.34-retirement-queue-results",
+    "artifact_sha256": "82b489a6c22df4a5b43f4410af6e7b874a070c008255f4f646ea178c5bbbff17",
+    "retirement_queue_results_json_sha256": "5441d47b882d4f16545e63c18c910885c509cf46aeb2a8b32860efd6d372a213",
+    "retirement_queue_results_git_blob_sha1": "afd2c277c3930c2cc6e29431872657e9db0c6b0b"
+  },
+  "controls": {
+    "queued_generation_counts": [1, 4, 16, 64, 256],
+    "flat_manifest_bytes": [70, 205, 758, 3014, 12351],
+    "naive_tail_walk_descriptor_visits": [1, 4, 16, 64, 256],
+    "candidate_new_descriptor_pages": 2,
+    "candidate_max_descriptor_preads_per_enqueue": 2,
+    "candidate_max_descriptor_pwrites_per_enqueue": 2,
+    "candidate_history_walks_per_enqueue": 0
+  },
+  "real_primary": {
+    "queued_retired_generations_before_cleanup": [0, 1, 2],
+    "queued_segment_counts": [1, 1, 2],
+    "max_enqueue_descriptor_preads": 2,
+    "max_enqueue_descriptor_pwrites": 2,
+    "descriptor_pages_appended_per_completed_generation": 2,
+    "reclaim_budget": 2,
+    "max_reclaimed_segments_per_step": 2,
+    "max_reclaim_descriptor_preads": 2,
+    "max_reclaim_descriptor_pwrites": 0,
+    "max_reclaim_pages_appended": 0,
+    "post_cleanup_reused_extents": 4,
+    "post_cleanup_scrub_pwrites": 128,
+    "all_129_keys_visible": true
+  },
+  "crash_evidence": {
+    "empty_queue_enqueue_cases": 4,
+    "nonempty_queue_enqueue_cases": 5,
+    "partial_head_reclaim_cases": 5,
+    "dequeue_head_reclaim_cases": 5,
+    "total_cases": 19,
+    "all_exact_committed_state_match": true,
+    "all_recovery_generation_scan_free": true,
+    "all_recovery_radix_scan_free": true,
+    "all_recovery_retirement_queue_scan_free": true,
+    "all_recovery_logical_redo_free": true,
+    "all_second_recovery_idempotent": true
+  },
+  "surviving_claim": "Within the fixed single-writer process-crash experiment, completed real primary generations can accumulate as a FIFO of retirement descriptors without waiting for earlier cleanup. Enqueue appends one dual-copy descriptor and touches at most the existing tail; reclaim touches only the committed head descriptor plus the explicit segment budget. The tested crash states are exact and recovery does not scan retirement history.",
+  "non_claims": [
+    "Total retirement-descriptor storage is not constant; append-only descriptor history grows with completed generations.",
+    "The experiment does not establish hardware power-loss, torn-sector, drive-cache, or filesystem-journal guarantees.",
+    "The experiment does not establish arbitrary multi-writer or distributed correctness.",
+    "The fixed 64-bit logical-segment and physical-pointer namespaces are not mathematical unboundedness.",
+    "The experiment does not reclaim descriptor pages, empty radix metadata nodes, or filesystem blocks.",
+    "The real-primary queue depth exercised is three simultaneously retired generations; larger queue counts are arithmetic/control cases, not real exponential-capacity growth runs."
+  ]
+}
