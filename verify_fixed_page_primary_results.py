@@ -50,7 +50,14 @@ def _allocated_measurements(value: Any, path: tuple[Any, ...] = ()) -> dict[tupl
         if "allocated_bytes" in value:
             if "file_size_bytes" not in value:
                 raise AssertionError(f"allocated_bytes lacks file_size_bytes at {path}")
-            rows[path] = (int(value["allocated_bytes"]), int(value["file_size_bytes"]))
+            allocated = value["allocated_bytes"]
+            file_size = value["file_size_bytes"]
+            if type(allocated) is not int or type(file_size) is not int:
+                raise AssertionError(
+                    f"v0.24 allocation observations must be integer byte counts at {path}: "
+                    f"allocated_bytes={allocated!r}, file_size_bytes={file_size!r}"
+                )
+            rows[path] = (allocated, file_size)
         for key, item in value.items():
             rows.update(_allocated_measurements(item, path + (key,)))
     elif isinstance(value, list):
