@@ -18,6 +18,25 @@ from simulator.recyclable_retirement_descriptors import (
 
 ROOT = Path(__file__).resolve().parent
 RESULTS_PATH = ROOT / "recyclable_retirement_descriptor_results.json"
+DIAGNOSTIC_PATH = ROOT / "recyclable_retirement_descriptor_diagnostic.json"
+
+
+def _write_failure_diagnostic(phase: str, exc: Exception) -> None:
+    payload = {
+        "experiment": "v0.35_recyclable_retirement_descriptors",
+        "phase": phase,
+        "exception_type": type(exc).__name__,
+        "exception_message": str(exc),
+    }
+    DIAGNOSTIC_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _run_phase(phase: str, fn):
+    try:
+        return fn()
+    except Exception as exc:
+        _write_failure_diagnostic(phase, exc)
+        raise
 
 
 def _require_semantic_guard(row: dict) -> None:
@@ -45,16 +64,19 @@ def _require_crash_matrix(matrix: dict, expected_failpoints: tuple[str, ...]) ->
 
 
 def run() -> dict:
-    semantic_guard = run_v016_normalized_case(
-        entity_count=128,
-        predicate_count=16,
-        history_depth=8,
-        changed_count=1,
+    semantic_guard = _run_phase(
+        "semantic_guard",
+        lambda: run_v016_normalized_case(
+            entity_count=128,
+            predicate_count=16,
+            history_depth=8,
+            changed_count=1,
+        ),
     )
-    _require_semantic_guard(semantic_guard)
-    controls = run_descriptor_storage_controls()
-    cycles = run_real_recycling_cycles()
-    crashes = run_recycling_crash_matrices()
+    _run_phase("semantic_guard_validation", lambda: _require_semantic_guard(semantic_guard))
+    controls = _run_phase("storage_controls", run_descriptor_storage_controls)
+    cycles = _run_phase("real_recycling_cycles", run_real_recycling_cycles)
+    crashes = _run_phase("crash_matrices", run_recycling_crash_matrices)
 
     if cycles["initial_descriptor_pages_appended"] != 6:
         raise AssertionError("three-descriptor initial pool did not append six pages")
@@ -126,4 +148,9 @@ def run() -> dict:
 
 
 if __name__ == "__main__":
-    run()
+    try:
+        run()
+    except Exception as exc:
+        if not DIAGNOSTIC_PATH.exists():
+            _write_failure_diagnostic("post_phase_validation", exc)
+        raise
