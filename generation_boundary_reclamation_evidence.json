@@ -1,0 +1,22 @@
+{
+  "experiment": "v0.33_generation_boundary_reclamation",
+  "initial_successful_ci": {
+    "workflow": "v0.33 experiment",
+    "run_number": 7,
+    "run_id": 34559442881,
+    "head_sha": "56f9f87d9720af67972a834f92d03b073ccfe593",
+    "artifact_id": 10183781669,
+    "artifact_sha256": "80a25be44e627a0975ff344cbca951e35d48e0f75fb695e8fee478f0661f3249",
+    "result_file": "generation_boundary_reclamation_results.json",
+    "result_sha256": "548b7d9d3432478dcddbb28e8acb6473cfaedff1167374392e6160c83d18fa2d"
+  },
+  "fixed_test": {
+    "segment_pages": 16,
+    "control_capacities": [32, 128, 2048, 131072, 4194304],
+    "first_migration_failpoints": ["allocated", "pages_written", "data_synced", "committed"],
+    "reuse_migration_failpoints": ["reused_extent_scrubbed", "pages_written", "data_synced", "committed"],
+    "reclaim_failpoints": ["mapping_unlinked", "free_header_written", "dependencies_synced", "committed"]
+  },
+  "surviving_claim": "Aligning every new logical primary generation to the 16-page mapping boundary removes mixed-generation mapping segments with at most 15 unused logical page ids per generation. In the tested real two-migration cycle, retired ownership is published from the real migration path, cleanup appends zero pages under fixed budgets, a reclaimed extent is reused only after a fixed 32-page scrub, and all 12 process-crash cases expose exact committed state with scan-free recovery.",
+  "claim_boundary": "Single-writer process-crash experiment over fixed 64-bit logical segment and physical pointer namespaces. One retired-generation cleanup backlog is allowed at a time. No claim is made for hardware power-loss/torn-sector safety, arbitrary multi-writer/distributed correctness, metadata-node pruning, filesystem allocated-block deallocation, or production performance."
+}

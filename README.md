@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.32
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.33
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -18,9 +18,9 @@ Architecture is treated as a surviving hypothesis, not as the goal. Negative res
 
 The production candidate still uses the normalized SQLite membership B-tree earned through v0.16. It provides revisable evidence/assertion semantics, valid- and knowledge-time queries, bounded context compilation, indexed candidate generation, dependency-aware invalidation/rebuild, transactional current heads, compositional facets, snapshot-consistent reads, and machine-readable replay evidence.
 
-The v0.18–v0.32 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, a modeled bounded-address segment map, an integrated append-local segmented primary, fixed-width radix nodes, and now a scoped fixed-budget mapping-lifecycle reclamation mechanism with explicit stale-payload isolation on reuse.
+The v0.18–v0.33 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, a modeled bounded-address segment map, an integrated append-local segmented primary, fixed-width radix nodes, fixed-budget mapping-lifecycle reclamation with explicit stale-payload isolation on reuse, and now segment-aligned real generation ownership.
 
-v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification with append-local fixed-size segments and an eight-level dual-copy radix map. v0.30 integrates that mapper into the real experimental fixed-page primary: across forced migration at `C={32,2048,131072,4194304}`, the largest observed physical append is 147,456 bytes, target lookup remains 20 user-space `pread`s, and all 16 real `SIGKILL` cases expose exact pre/post committed state with scan-free, redo-free frontier recovery. v0.31 then falsifies the mapper's variable-width JSON node representation: effective one-page fanout falls to 154 near the uint64 limit. A fixed 256-bit occupancy bitmap plus 256 uint64 pointer slots uses 2,103 bytes, round-trips all 256 edges at every tested pointer magnitude, and carries a real 255→256 root transition through 5/5 exact `SIGKILL` cases with zero node splits. v0.32 next falsifies mapping-only free-extent reuse: a CRC-valid retired payload becomes visible under a new logical mapping. Intrusive dual-copy lifecycle headers plus a committed retirement cursor bound each cleanup step to `B=3` ownership visits in the fixed experiment, while a 32-page fixed-footprint scrub prevents the demonstrated payload resurrection before reuse publication. Reclaim is 4/4 exact under `SIGKILL`; reuse is 5/5 exact, with scan-free, redo-free recovery.
+v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification with append-local fixed-size segments and an eight-level dual-copy radix map. v0.30 integrates that mapper into the real experimental fixed-page primary: across forced migration at `C={32,2048,131072,4194304}`, the largest observed physical append is 147,456 bytes, target lookup remains 20 user-space `pread`s, and all 16 real `SIGKILL` cases expose exact pre/post committed state with scan-free, redo-free frontier recovery. v0.31 then falsifies the mapper's variable-width JSON node representation: effective one-page fanout falls to 154 near the uint64 limit. A fixed 256-bit occupancy bitmap plus 256 uint64 pointer slots uses 2,103 bytes, round-trips all 256 edges at every tested pointer magnitude, and carries a real 255→256 root transition through 5/5 exact `SIGKILL` cases with zero node splits. v0.32 next falsifies mapping-only free-extent reuse: a CRC-valid retired payload becomes visible under a new logical mapping. Intrusive dual-copy lifecycle headers plus a committed retirement cursor bound each cleanup step to `B=3` ownership visits in the fixed experiment, while a 32-page fixed-footprint scrub prevents the demonstrated payload resurrection before reuse publication. Reclaim is 4/4 exact under `SIGKILL`; reuse is 5/5 exact, with scan-free, redo-free recovery. v0.33 then finds that the real primary cannot safely adopt whole-segment ownership while generations are allocated back-to-back: the next generation starts inside the predecessor's final 16-page mapping segment. Aligning every new generation base to the next segment boundary costs at most 15 unused logical page ids, allocates no capacity-scaled physical padding, and lets real migration completion publish v0.32 ownership directly. Two real growth cycles preserve all keys, safely reuse a reclaimed extent after the fixed 32-page scrub, and pass 12/12 process-crash cases with scan-free recovery.
 
 ## Deliberate non-claims
 
@@ -39,11 +39,12 @@ Current evidence does **not** establish:
 - bounded filesystem allocated-block reclamation from file-length truncation;
 - bounded stale-generation residue under the current direct-address layout;
 - mathematically unbounded logical identifiers from the fixed eight-level/64-bit radix namespace;
-- hardware power-loss or torn-write safety from the v0.30–v0.32 process-crash results;
+- hardware power-loss or torn-write safety from the v0.30–v0.33 process-crash results;
 - mathematically unbounded physical identifiers beyond the fixed uint64 pointer model;
 - constant total retired-generation cleanup work; draining `K` retired materialized segments still takes `Theta(K)` ownership visits;
 - filesystem block deallocation, hole punching, or reclamation of now-empty radix metadata nodes;
-- automatic safe ownership attribution across unaligned primary-generation boundaries;
+- safe whole-segment reclamation for deliberately unaligned logical generation boundaries;
+- nonblocking progress when more than one completed generation is awaiting reclamation; v0.33 intentionally permits one retirement backlog at a time;
 - a production-ready extent-map, segmented-address, or reclamation replacement;
 - a strong agentic-RAG superiority result.
 
@@ -83,6 +84,7 @@ Current evidence does **not** establish:
 | v0.30 | Does the segmented mapper survive integration with real fixed-page writes and process death? | Yes for the tested single-writer matrix: max append 147,456 B, target lookup 20 preads, 16/16 exact crash images, and frontier recovery with zero generation/radix scan or logical redo. |
 | v0.31 | Does dense radix-node growth force representation-driven overflow or recursive splits? | The JSON control loses one-page fanout as pointers widen; a fixed 2,103-byte binary node preserves all 256 edges, needs 0 splits at 255→256, and passes 5/5 exact crash cases with scan-free recovery. |
 | v0.32 | Can retired mappings be reclaimed incrementally and their extents safely reused? | Intrusive lifecycle state caps tested cleanup at `B=3` segments/step with zero append; mapping-only reuse leaks stale payloads, while a fixed 32-page scrub repairs the demonstrated leak and passes 4/4 reclaim + 5/5 reuse crash cases. |
+| v0.33 | Can real primary-generation retirement use whole-segment ownership safely? | Back-to-back generations share a 16-page mapping segment; segment-aligning new bases costs at most 15 logical ids, removes the overlap, preserves two real growth cycles and reuse, and passes 12/12 exact process-crash cases. |
 
 Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_evidence.json`, and executable `verify_*_results.py` gates.
 
@@ -208,6 +210,22 @@ The experiment also found a stronger reuse failure. Mapping-only reuse of a recl
 
 The real reclaim crash matrix is **4/4 exact** and the reuse matrix is **5/5 exact**. Recovery remains generation-scan-free, radix-scan-free, redo-free, and physically idempotent on a second pass. This is still a scoped mapping-lifecycle result: current primary generations can begin at logical pages such as 9 or 513, so a 16-page mapping segment may straddle a primary-generation boundary. v0.32 does not claim safe automatic reclamation of such shared segments.
 
+### v0.33 — segment-aligned real generation ownership
+
+v0.33 integrates v0.32 with the real primary-generation lifecycle. The unaligned control confirms that back-to-back generation allocation shares a mapping segment at every tested capacity `C={32,128,2048,131072,4194304}`. The candidate changes only the logical base formula for a new generation:
+
+\[
+\boxed{AlignedBase(p)=16\left\lceil p/16\right\rceil}
+\]
+
+so each new generation starts on a mapping-segment boundary. The tested padding is 7 page ids at `C=32` and 15 at every larger control capacity; it is always strictly less than 16 and does not itself allocate physical storage.
+
+Two real growth cycles exercise actual ownership transfer. Generation `0→1` aligns page `9` to `16`, completes migration, publishes generation 0's owner chain for retirement, and reclaims it with zero appended pages. Generation `1→2` aligns the next base to page `48`; while migration is active, old generation 1 ends in segment `2` and current generation 2 begins in segment `3`, so whole-segment ownership is disjoint. The trigger safely reuses one reclaimed extent only after **32 scrub writes**, allocates one additional fresh extent, and appends **34 pages / 139,264 bytes**; its bounded migration completes on the next transaction with **0 additional appended pages**. After cleanup, all 34 keys remain visible.
+
+The process-crash evidence covers **12/12 exact cases**: four first-migration kills, four reuse-backed migration kills, and four generation-integrated reclaim kills. Maximum pre-recovery tail in the insert matrices is **139,264 bytes** and is truncated to zero. Recovery remains generation-scan-free, radix-scan-free, redo-free, and idempotent on a second pass.
+
+The result establishes safe whole-segment retirement only for the aligned candidate and the tested single-writer process-crash model. v0.33 intentionally allows only one retirement backlog at a time; a new migration is rejected until that backlog drains.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -233,6 +251,7 @@ python run_segmented_extent_mapping_experiment.py
 python run_integrated_segmented_primary_experiment.py
 python run_fixed_width_radix_node_experiment.py
 python run_retired_generation_reclamation_experiment.py
+python run_generation_boundary_reclamation_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -259,6 +278,7 @@ python verify_segmented_extent_mapping_results.py
 python verify_integrated_segmented_primary_results.py
 python verify_fixed_width_radix_node_results.py
 python verify_retired_generation_reclamation_results.py
+python verify_generation_boundary_reclamation_results.py
 ```
 
 CI runs this chain and uploads the milestone evidence ledgers as artifacts.
@@ -296,18 +316,21 @@ Experimental membership alternative
   -> fixed-width 256-slot radix nodes remove representation-driven node splitting
   -> intrusive segment lifecycle bounds reclamation work per explicit cleanup step
   -> fixed-footprint scrub is required before safe observed cross-owner extent reuse
+  -> segment-aligned generation bases make real whole-segment ownership disjoint
+  -> real migration completion publishes retired ownership for bounded cleanup
 ```
 
-## Next falsification target — generation-boundary integration
+## Next falsification target — multiple retirement backlogs
 
-v0.32 bounds scoped mapping-lifecycle cleanup, but the real primary's logical generation ranges are not guaranteed to align to the 16-page mapping-segment geometry. A physical mapping segment can therefore contain logical pages from more than one primary generation.
+v0.33 integrates whole-segment reclamation with real primary migrations, but it enforces a deliberate admission rule: another migration cannot start while the previous retired-generation cleanup backlog remains nonzero. This prevents lifecycle-state collision but can turn cleanup lag into foreground migration blockage.
 
 The next question is:
 
 \[
 \boxed{
-Can actual primary-generation retirement acquire safe segment ownership without capacity-sized padding, global scans, or unbounded migration work?
+Can multiple retired generations queue for incremental reclamation without blocking later migrations,
+without an O(history) serialized manifest or scan-based recovery?
 }
 \]
 
-v0.33 should compare at least two mechanisms: segment-aligned generation allocation versus finer-grained/shared-segment ownership (for example, per-segment live-generation references). It should force multiple real growth transitions, retire actual primary generations, and inject process death across ownership transfer and reclamation. Reject any mechanism that frees a segment while still-live logical pages share it, requires `Theta(C)` alignment padding, scans the full radix/generation range, or moves an unbounded rewrite onto the mutation path.
+v0.34 should make retirement descriptors themselves incrementally addressable and crash-published. The fixed test should let migration production outrun cleanup for several generations, then reclaim under a fixed per-step budget while injecting process death across descriptor enqueue, cleanup cursor advance, extent reuse, and queue-head publication. Reject the mechanism if any mutation performs work proportional to retirement backlog/history, if restart scans the queue or full radix map, if descriptors can be lost or duplicated, or if extent reuse resurrects a retired generation.
