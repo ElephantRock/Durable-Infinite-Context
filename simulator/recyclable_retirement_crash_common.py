@@ -104,6 +104,21 @@ def build_nonempty_reuse_fixture(path: Path) -> None:
         raise AssertionError("non-empty reuse fixture has wrong queue/free depth")
 
 
+def build_partial_reclaim_fixture(path: Path) -> None:
+    store = RecyclableRetirementDescriptorPrimaryStore(str(path))
+    store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=512)
+    for index in range(65):
+        store.insert(f"k-{index:03d}")
+    while True:
+        queue = store.retirement_queue_snapshot()
+        if queue["queue_count"] <= 0:
+            raise AssertionError("could not find multi-segment v0.35 retirement head")
+        remaining = int(queue["descriptors"][0]["remaining_segments"])
+        if remaining > 1:
+            return
+        store.reclaim_step(budget=remaining)
+
+
 def build_dequeue_fixture(path: Path) -> None:
     store = RecyclableRetirementDescriptorPrimaryStore(str(path))
     store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=512)
