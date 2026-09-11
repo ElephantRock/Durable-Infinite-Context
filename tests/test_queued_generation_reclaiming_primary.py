@@ -47,7 +47,7 @@ class QueuedGenerationReclaimingPrimaryTests(unittest.TestCase):
                     migration_traces.append(trace)
 
             self.assertEqual(3, len(migration_traces))
-            self.assertEqual([1, 2, 3], [t.current_capacity // 32 for t in migration_traces])
+            self.assertEqual([64, 128, 256], [t.current_capacity for t in migration_traces])
             queue = store.retirement_queue_snapshot()
             self.assertEqual(3, queue["queue_count"])
             self.assertEqual(
