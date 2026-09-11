@@ -38,6 +38,7 @@ jobs:
       - run: python run_integrated_segmented_primary_experiment.py
       - run: python run_fixed_width_radix_node_experiment.py
       - run: python run_retired_generation_reclamation_experiment.py
+      - run: python run_generation_boundary_reclamation_experiment.py
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -64,6 +65,7 @@ jobs:
       - run: python verify_integrated_segmented_primary_results.py
       - run: python verify_fixed_width_radix_node_results.py
       - run: python verify_retired_generation_reclamation_results.py
+      - run: python verify_generation_boundary_reclamation_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -183,4 +185,9 @@ jobs:
         with:
           name: v0.32-retired-generation-reclamation-results
           path: retired_generation_reclamation_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.33-generation-boundary-reclamation-results
+          path: generation_boundary_reclamation_results.json
           if-no-files-found: error
