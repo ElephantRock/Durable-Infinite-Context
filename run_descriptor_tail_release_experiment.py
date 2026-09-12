@@ -67,6 +67,12 @@ def run() -> dict:
             raise AssertionError("v0.36 real free head unexpectedly equals physical tail")
         if int(row["committed_suffix_pages_after_free_head"]) <= 0:
             raise AssertionError("v0.36 real free head lacks committed suffix evidence")
+        if not bool(row["all_free_descriptors_buried_below_tail"]):
+            raise AssertionError("v0.36 observed a free descriptor that was not buried")
+        if int(row["minimum_committed_suffix_pages_after_free_descriptor"]) <= 0:
+            raise AssertionError("v0.36 free descriptor lacks positive committed suffix")
+        if len(row["free_descriptor_layout_diagnostic"]) != int(row["expected_descriptor_pool"]):
+            raise AssertionError("v0.36 diagnostic free descriptor count drifted")
 
     out = {
         "experiment": "v0.36_descriptor_tail_release",
@@ -85,8 +91,8 @@ def run() -> dict:
         ),
         "first_principle": (
             "file-tail truncation can release a buried free object without relocation only when that object "
-            "already occupies the committed physical suffix. A current-root-only mechanism must reject the "
-            "candidate rather than search historical/free-list state for a convenient tail object."
+            "already occupies the committed physical suffix. Diagnostic traversal may characterize the full "
+            "free layout, but candidate foreground work must not depend on that traversal."
         ),
         "hypothesis_under_test": (
             "after the real retirement queue drains, the current descriptor free-list head may also be the "
@@ -95,14 +101,15 @@ def run() -> dict:
         "prediction": (
             "if the hypothesis is true, `free_head_page + 2 == next_physical_page` in a real one-descriptor "
             "case and/or a real three-descriptor peak case. If committed pages remain above the free head in "
-            "both cases, head-only tail release is structurally inapplicable and must be rejected."
+            "both cases, head-only tail release is structurally inapplicable. A diagnostic full-free-chain "
+            "snapshot additionally records whether any currently free pair occupies the tail."
         ),
         "result": (
-            "falsified: real append-local data/metadata placement leaves committed pages above the current "
-            "descriptor free-list head after cleanup. Tail-only release returns zero pages without scanning. "
-            "Any surviving bounded reduction mechanism needs an additional capability such as segregated "
-            "placement, maintained tail-addressable metadata, relocation, or a broader allocator able to "
-            "reuse buried descriptor pairs; this experiment does not choose among those alternatives."
+            "falsified: real append-local data/metadata placement leaves committed pages above every free "
+            "retirement-descriptor pair observed after cleanup. The head-only candidate returns zero pages "
+            "without history walks. The full-chain observation is diagnostic only. Any surviving physical "
+            "capacity reduction must change or escape the current interleaved placement, for example through "
+            "descriptor segregation, relocation, or a broader allocator able to reuse buried pairs."
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
