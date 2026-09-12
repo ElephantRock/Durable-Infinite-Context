@@ -71,9 +71,9 @@ def _real_tail_control(key_count: int, expected_pool: int) -> dict[str, Any]:
         eligible = descriptor_end == frontier
 
         # The candidate under falsification is intentionally strict: with no scan,
-        # relocation, or segregated arena, only a free head already at the committed
-        # file tail could be physically truncated. The real primary disproves that
-        # precondition even after all retirement work drains.
+        # relocation, segregated arena, or maintained tail-addressable metadata, only
+        # a current free head already at the committed file tail could be truncated.
+        # The real primary disproves that precondition after retirement work drains.
         if eligible:
             _fail(
                 "v0.36 real descriptor unexpectedly landed at physical tail",
@@ -129,7 +129,8 @@ def run_tail_release_falsification() -> dict[str, Any]:
             "the current free head at the file tail"
         ),
         "next_requirement": (
-            "physical descriptor capacity reduction needs placement segregation, relocation, or a broader "
-            "allocator that can reuse buried descriptor pairs without requiring tail truncation"
+            "physical descriptor capacity reduction needs placement segregation, maintained tail-addressable "
+            "metadata, relocation, or a broader allocator that can reuse buried descriptor pairs without "
+            "requiring current-free-head tail truncation"
         ),
     }
