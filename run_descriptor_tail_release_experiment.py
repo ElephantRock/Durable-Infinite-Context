@@ -4,12 +4,7 @@ import json
 from pathlib import Path
 
 from simulator.normalized_membership import run_v016_normalized_case
-from simulator.trimmable_retirement_crash_matrices import (
-    FRESH_AFTER_RELEASE_FAILPOINTS,
-    TRIM_FAILPOINTS,
-    run_trimmable_retirement_crash_matrices,
-)
-from simulator.trimmable_retirement_descriptors import run_tail_release_cycle
+from simulator.trimmable_retirement_descriptors import run_tail_release_falsification
 
 ROOT = Path(__file__).resolve().parent
 RESULTS_PATH = ROOT / "descriptor_tail_release_results.json"
@@ -47,17 +42,6 @@ def _require_semantic_guard(row: dict) -> None:
         raise AssertionError("v0.16 semantic guard failed before v0.36 experiment")
 
 
-def _require_matrix(matrix: dict, failpoints: tuple[str, ...]) -> None:
-    if matrix["failpoints"] != list(failpoints):
-        raise AssertionError("v0.36 crash failpoint set drifted")
-    if not matrix["all_exact_committed_state_match"]:
-        raise AssertionError("v0.36 crash matrix exposed mixed committed state")
-    if not matrix["all_recovery_scan_free"]:
-        raise AssertionError("v0.36 crash recovery introduced scan-based repair")
-    if not matrix["all_second_recovery_idempotent"]:
-        raise AssertionError("v0.36 second recovery lost idempotence")
-
-
 def run() -> dict:
     semantic_guard = _run_phase(
         "semantic_guard",
@@ -69,36 +53,20 @@ def run() -> dict:
         ),
     )
     _run_phase("semantic_guard_validation", lambda: _require_semantic_guard(semantic_guard))
-    cycle = _run_phase("tail_release_cycle", run_tail_release_cycle)
-    crashes = _run_phase("crash_matrices", run_trimmable_retirement_crash_matrices)
+    control = _run_phase("real_tail_release_control", run_tail_release_falsification)
 
-    release = cycle["tail_release_trace"]
-    blocked = cycle["second_release_trace"]
-    if int(release["physical_pages_released"]) != 2:
-        raise AssertionError("v0.36 did not release one descriptor pair")
-    if int(cycle["descriptor_pool_after_peak_release"]) != 2:
-        raise AssertionError("v0.36 retained historical descriptor peak after eligible release")
-    if bool(blocked["tail_release_eligible"]):
-        raise AssertionError("v0.36 scanned/trimmed through an interleaved non-tail descriptor")
-    if int(blocked["retirement_descriptor_preads"]) != 2:
-        raise AssertionError("v0.36 blocked non-tail release was not head-local")
-    if not cycle["released_identity"]["rejected_immediately_after_release"]:
-        raise AssertionError("v0.36 released descriptor identity remained resolvable")
-    if not cycle["released_identity"]["rejected_after_frontier_regrowth"]:
-        raise AssertionError("v0.36 released descriptor identity resurrected after later appends")
-    if [int(row["descriptor_incarnation"]) for row in cycle["after_regrowth_queue"]["descriptors"]] != [4, 5, 6]:
-        raise AssertionError("v0.36 global descriptor incarnation counter reset")
-    if int(cycle["descriptor_pool_after_live_demand_returns"]) != 3:
-        raise AssertionError("v0.36 descriptor pool failed to regrow when live demand returned")
-    if not cycle["all_513_keys_visible"]:
-        raise AssertionError("v0.36 real release/regrowth cycle lost live primary keys")
-
-    _require_matrix(crashes["tail_release"], TRIM_FAILPOINTS)
-    _require_matrix(crashes["fresh_after_release"], FRESH_AFTER_RELEASE_FAILPOINTS)
-    if not crashes["fresh_after_release"]["all_released_identity_rejected"]:
-        raise AssertionError("v0.36 released identity survived later fresh allocation")
-    if int(crashes["case_count"]) != 8:
-        raise AssertionError("v0.36 crash matrix count drifted")
+    if not control["falsified"]:
+        raise AssertionError("v0.36 tail-release control failed to falsify candidate")
+    if int(control["candidate_history_walks"]) != 0:
+        raise AssertionError("v0.36 control introduced descriptor-history work")
+    if int(control["candidate_physical_pages_released"]) != 0:
+        raise AssertionError("v0.36 control unexpectedly released physical pages")
+    for name in ("single_descriptor_case", "three_descriptor_peak_case"):
+        row = control[name]
+        if bool(row["free_head_is_physical_tail"]):
+            raise AssertionError("v0.36 real free head unexpectedly equals physical tail")
+        if int(row["committed_suffix_pages_after_free_head"]) <= 0:
+            raise AssertionError("v0.36 real free head lacks committed suffix evidence")
 
     out = {
         "experiment": "v0.36_descriptor_tail_release",
@@ -110,34 +78,30 @@ def run() -> dict:
             "full_assembly_equal": semantic_guard["full_assembly_equal"],
             "partial_assembly_equal": semantic_guard["partial_assembly_equal"],
         },
-        "tail_release_cycle": cycle,
-        "crash_matrices": crashes,
+        "tail_release_control": control,
         "observe": (
             "v0.35 stops descriptor storage from following completed-generation history once reusable "
-            "capacity exists, but every allocated pair remains in the internal pool after backlog peaks."
+            "capacity exists, but every allocated pair remains retained after a backlog peak."
         ),
         "first_principle": (
-            "physical capacity can be returned without history scans only when releasable storage is "
-            "already identified by current roots and lies at a reclaimable physical boundary. Releasing "
-            "a physical address must also preserve logical identity across any later reuse of that address."
+            "file-tail truncation can release a buried free object without relocation only when that object "
+            "already occupies the committed physical suffix. A current-root-only mechanism must reject the "
+            "candidate rather than search historical/free-list state for a convenient tail object."
         ),
         "hypothesis_under_test": (
-            "release only the committed descriptor free-list head when its two-page pair is exactly the "
-            "committed append tail. Publish the shorter frontier before derived physical truncation, keep "
-            "the step head-local, and allocate descriptor incarnations from one committed monotonic counter "
-            "so physical release cannot reset descriptor identity."
+            "after the real retirement queue drains, the current descriptor free-list head may also be the "
+            "committed append tail, allowing one descriptor pair to be returned with zero history walks."
         ),
         "prediction": (
-            "the real three-descriptor pool should shrink to two pages-pairs after one constant-local tail "
-            "release; a second step should stop at the interleaved non-tail boundary rather than scan; "
-            "later live demand should regrow the pool only when needed, released stale identities must remain "
-            "rejected, and SIGKILL before/after frontier publication and later fresh allocation must recover "
-            "exact state without descriptor scans or logical redo."
+            "if the hypothesis is true, `free_head_page + 2 == next_physical_page` in a real one-descriptor "
+            "case and/or a real three-descriptor peak case. If committed pages remain above the free head in "
+            "both cases, head-only tail release is structurally inapplicable and must be rejected."
         ),
         "result": (
-            "survives only as an opportunistic tail-release mechanism. It does not claim arbitrary excess "
-            "descriptor compaction: non-tail free descriptors remain retained unless a future mechanism can "
-            "relocate or segregate them without moving historical work onto the foreground path."
+            "falsified: real append-local data/metadata placement leaves committed pages above the current "
+            "descriptor free-list head after cleanup. Tail-only release returns zero pages without scanning. "
+            "The next mechanism must change placement or reuse buried descriptor storage through a broader "
+            "allocator rather than pretending file-tail truncation can compact interleaved objects."
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
