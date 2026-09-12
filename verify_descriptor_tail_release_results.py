@@ -1,0 +1,3 @@
+from __future__ import annotations
+
+EXPECTED_SHA256 = "76f17b72a44e59d193a7e0cf785f57b782935b64c2809929fc6dbc78ecdd0bb5"
