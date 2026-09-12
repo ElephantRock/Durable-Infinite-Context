@@ -100,8 +100,9 @@ def run() -> dict:
         "result": (
             "falsified: real append-local data/metadata placement leaves committed pages above the current "
             "descriptor free-list head after cleanup. Tail-only release returns zero pages without scanning. "
-            "The next mechanism must change placement or reuse buried descriptor storage through a broader "
-            "allocator rather than pretending file-tail truncation can compact interleaved objects."
+            "Any surviving bounded reduction mechanism needs an additional capability such as segregated "
+            "placement, maintained tail-addressable metadata, relocation, or a broader allocator able to "
+            "reuse buried descriptor pairs; this experiment does not choose among those alternatives."
         ),
     }
     RESULTS_PATH.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
