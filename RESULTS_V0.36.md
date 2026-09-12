@@ -49,11 +49,11 @@ pair [ 88, 90) -> 206 committed suffix pages
 pair [ 52, 54) -> 242 committed suffix pages
 ```
 
-Every observed free descriptor is therefore buried below committed live suffix state. The bounded candidate performs:
+Every observed free descriptor is therefore buried below the committed physical frontier. The bounded candidate performs:
 
 ```text
-candidate history walks          = 0
-candidate relocations            = 0
+candidate history walks           = 0
+candidate relocations             = 0
 candidate physical pages released = 0
 ```
 
@@ -82,12 +82,12 @@ artifact digest: sha256:e34a7556275e2177e5665cb72d9f66c2f9565623b5245a13d1c93066
 descriptor_tail_release_results.json sha256: 76f17b72a44e59d193a7e0cf785f57b782935b64c2809929fc6dbc78ecdd0bb5
 ```
 
-The connector rejected a binary gzip write before it reached GitHub, so v0.36 freezes the canonical **raw-result SHA-256** in `verify_descriptor_tail_release_results.py` instead of pretending a compressed artifact was committed. The verifier reruns the real experiment, checks the claim-bearing fixture values and locality/non-locality distinctions, requires canonical byte serialization, and requires the generated result bytes to reproduce that exact hash.
+v0.36 freezes the canonical **raw-result SHA-256** in `verify_descriptor_tail_release_results.py`. The verifier reruns the real experiment, checks the claim-bearing fixture values and locality/non-locality distinctions, requires canonical byte serialization, and requires the generated result bytes to reproduce that exact hash.
 
 The first verifier workflow pass was:
 
 ```text
-workflow: v0.36 frozen-result verifier
+workflow: v0.36 canonical-result verifier
 run number: 1
 run id: 34684439912
 job id: 103528845030
