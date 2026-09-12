@@ -60,6 +60,16 @@ jobs:
           name: v0.36-descriptor-tail-release-diagnostic
           path: descriptor_tail_release_diagnostic.json
           if-no-files-found: error
+      - name: Run v0.37 segregated retirement descriptor arena experiment
+        id: v037
+        run: python run_segregated_retirement_descriptor_experiment.py
+      - name: Upload v0.37 failure diagnostic
+        if: ${{ failure() && steps.v037.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.37-segregated-retirement-descriptor-diagnostic
+          path: segregated_retirement_descriptor_diagnostic.json
+          if-no-files-found: error
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -228,4 +238,9 @@ jobs:
         with:
           name: v0.36-descriptor-tail-release-results
           path: descriptor_tail_release_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.37-segregated-retirement-descriptor-results
+          path: segregated_retirement_descriptor_results.json
           if-no-files-found: error
