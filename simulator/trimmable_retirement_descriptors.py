@@ -61,19 +61,44 @@ def _real_tail_control(key_count: int, expected_pool: int) -> dict[str, Any]:
         if not drained["free_descriptors"]:
             _fail("v0.36 control has no free-list head", key_count=key_count, snapshot=drained)
 
-        head = drained["free_descriptors"][0]
-        head_page = int(head["descriptor_page"])
-        head_incarnation = int(head["descriptor_incarnation"])
         meta = store.meta_snapshot()
         frontier = int(meta["next_physical_page"])
-        descriptor_end = head_page + 2
-        suffix_pages = frontier - descriptor_end
-        eligible = descriptor_end == frontier
+        free_layout: list[dict[str, Any]] = []
+        for descriptor in drained["free_descriptors"]:
+            page = int(descriptor["descriptor_page"])
+            end_page = page + 2
+            suffix_pages = frontier - end_page
+            free_layout.append(
+                {
+                    "descriptor_page": page,
+                    "descriptor_incarnation": int(descriptor["descriptor_incarnation"]),
+                    "descriptor_end_page": end_page,
+                    "committed_suffix_pages": suffix_pages,
+                    "is_physical_tail": end_page == frontier,
+                }
+            )
+
+        all_buried = all(int(row["committed_suffix_pages"]) > 0 for row in free_layout)
+        if not all_buried:
+            _fail(
+                "v0.36 found a free descriptor at or beyond the committed physical tail",
+                key_count=key_count,
+                frontier=frontier,
+                free_layout=free_layout,
+                snapshot=drained,
+            )
+
+        head = free_layout[0]
+        head_page = int(head["descriptor_page"])
+        head_incarnation = int(head["descriptor_incarnation"])
+        descriptor_end = int(head["descriptor_end_page"])
+        suffix_pages = int(head["committed_suffix_pages"])
+        eligible = bool(head["is_physical_tail"])
 
         # The candidate under falsification is intentionally strict: with no scan,
-        # relocation, segregated arena, or maintained tail-addressable metadata, only
-        # a current free head already at the committed file tail could be truncated.
-        # The real primary disproves that precondition after retirement work drains.
+        # relocation, segregated arena, or alternate allocator, only a current free
+        # head already at the committed file tail could be truncated. The full free
+        # chain is traversed only by this diagnostic measurement, not by the candidate.
         if eligible:
             _fail(
                 "v0.36 real descriptor unexpectedly landed at physical tail",
@@ -81,13 +106,6 @@ def _real_tail_control(key_count: int, expected_pool: int) -> dict[str, Any]:
                 head=head,
                 meta=meta,
                 snapshot=drained,
-            )
-        if suffix_pages <= 0:
-            _fail(
-                "v0.36 real descriptor suffix observation is not positive",
-                key_count=key_count,
-                head=head,
-                meta=meta,
             )
 
         return {
@@ -105,6 +123,12 @@ def _real_tail_control(key_count: int, expected_pool: int) -> dict[str, Any]:
             "committed_suffix_pages_after_free_head": suffix_pages,
             "free_head_is_physical_tail": eligible,
             "head_only_tail_release_possible": eligible,
+            "free_descriptor_layout_diagnostic": free_layout,
+            "all_free_descriptors_buried_below_tail": all_buried,
+            "minimum_committed_suffix_pages_after_free_descriptor": min(
+                int(row["committed_suffix_pages"]) for row in free_layout
+            ),
+            "diagnostic_free_chain_traversal_is_not_candidate_work": True,
             "descriptor_history_walks_required_by_control": 0,
             "physical_pages_released_by_control": 0,
         }
@@ -115,6 +139,10 @@ def run_tail_release_falsification() -> dict[str, Any]:
     peak_three = _real_tail_control(65, 3)
     if single["head_only_tail_release_possible"] or peak_three["head_only_tail_release_possible"]:
         raise AssertionError("v0.36 head-only tail-release candidate unexpectedly survived")
+    if not single["all_free_descriptors_buried_below_tail"]:
+        raise AssertionError("v0.36 single-descriptor layout was not buried")
+    if not peak_three["all_free_descriptors_buried_below_tail"]:
+        raise AssertionError("v0.36 three-descriptor layout contained an unexpected free tail pair")
     return {
         "single_descriptor_case": single,
         "three_descriptor_peak_case": peak_three,
@@ -124,13 +152,14 @@ def run_tail_release_falsification() -> dict[str, Any]:
         "candidate_physical_pages_released": 0,
         "falsified": True,
         "reason": (
-            "real append-local placement leaves committed physical pages above the descriptor free-list head; "
-            "after retirement work drains, neither the one-descriptor nor three-descriptor real case places "
-            "the current free head at the file tail"
+            "real append-local placement leaves committed physical pages above every free retirement-descriptor "
+            "pair observed after drain; in particular, the current free-list head is never the file tail in "
+            "the one-descriptor or three-descriptor real cases"
         ),
         "next_requirement": (
-            "physical descriptor capacity reduction needs placement segregation, maintained tail-addressable "
-            "metadata, relocation, or a broader allocator that can reuse buried descriptor pairs without "
-            "requiring current-free-head tail truncation"
+            "physical descriptor capacity reduction needs a mechanism that changes or escapes the current "
+            "interleaved placement, such as descriptor segregation, relocation, or a broader allocator able "
+            "to reuse buried descriptor pairs; maintained tail-addressable metadata alone cannot truncate a "
+            "pair while committed pages remain above it"
         ),
     }
