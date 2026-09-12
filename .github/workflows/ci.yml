@@ -40,6 +40,16 @@ jobs:
       - run: python run_retired_generation_reclamation_experiment.py
       - run: python run_generation_boundary_reclamation_experiment.py
       - run: python run_retirement_queue_experiment.py
+      - name: Run v0.35 recyclable retirement descriptor experiment
+        id: v035
+        run: python run_recyclable_retirement_descriptor_experiment.py
+      - name: Upload v0.35 failure diagnostic
+        if: ${{ failure() && steps.v035.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.35-recyclable-retirement-descriptor-diagnostic
+          path: recyclable_retirement_descriptor_diagnostic.json
+          if-no-files-found: error
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -68,6 +78,7 @@ jobs:
       - run: python verify_retired_generation_reclamation_results.py
       - run: python verify_generation_boundary_reclamation_results.py
       - run: python verify_retirement_queue_results.py
+      - run: python verify_recyclable_retirement_descriptor_results.py
       - uses: actions/upload-artifact@v4
         with:
           name: v0.9-process-recovery-results
@@ -197,4 +208,9 @@ jobs:
         with:
           name: v0.34-retirement-queue-results
           path: retirement_queue_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.35-recyclable-retirement-descriptor-results
+          path: recyclable_retirement_descriptor_results.json
           if-no-files-found: error
