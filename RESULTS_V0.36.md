@@ -87,13 +87,15 @@ v0.36 freezes the canonical **raw-result SHA-256** in `verify_descriptor_tail_re
 The first verifier workflow pass was:
 
 ```text
-workflow: v0.36 canonical-result verifier
+workflow: v0.36 frozen-result verifier
 run number: 1
 run id: 34684439912
 job id: 103528845030
 head: 1b52ce51df782718e06cfd7349d668d6a73ae024
 result verifier: success
 ```
+
+The workflow was subsequently renamed `v0.36 canonical-result verifier` to match the actual evidence model: v0.36 pins and reproduces the raw canonical hash rather than committing a compressed result artifact.
 
 ## Deliberate non-claims
 
