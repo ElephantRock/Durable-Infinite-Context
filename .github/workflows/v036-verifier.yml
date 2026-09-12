@@ -1,4 +1,4 @@
-name: v0.36 frozen-result verifier
+name: v0.36 canonical-result verifier
 
 on:
   push:
