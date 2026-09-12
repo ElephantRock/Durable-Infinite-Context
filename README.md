@@ -1,4 +1,4 @@
-# Durable Infinite Context — Minimum Falsifiable Prototype v0.34
+# Durable Infinite Context — Minimum Falsifiable Prototype v0.35
 
 This repository is a falsification-first research prototype for **Durable Infinite Context**: durable memory may grow without bound while task context remains bounded and reconstructed on demand.
 
@@ -18,9 +18,9 @@ Architecture is treated as a surviving hypothesis, not as the goal. Negative res
 
 The production candidate still uses the normalized SQLite membership B-tree earned through v0.16. It provides revisable evidence/assertion semantics, valid- and knowledge-time queries, bounded context compilation, indexed candidate generation, dependency-aware invalidation/rebuild, transactional current heads, compositional facets, snapshot-consistent reads, and machine-readable replay evidence.
 
-The v0.18–v0.34 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, a modeled bounded-address segment map, an integrated append-local segmented primary, fixed-width radix nodes, fixed-budget mapping-lifecycle reclamation with explicit stale-payload isolation on reuse, segment-aligned real generation ownership, and now bounded FIFO publication of multiple retired-generation backlogs.
+The v0.18–v0.35 hash/cuckoo/overflow/fixed-page structures remain **experimental alternatives**, not replacements for that production B-tree. They have progressively earned bounded migration scheduling, bounded modeled placement work, explicit rare overflow, crash-atomic hybrid admission, arithmetic-addressed fixed pages, cross-store visibility gating, interrupted-recovery convergence, an explicit volatile/durable persistence-ordering model, a modeled bounded-address segment map, an integrated append-local segmented primary, fixed-width radix nodes, fixed-budget mapping-lifecycle reclamation with explicit stale-payload isolation on reuse, segment-aligned real generation ownership, bounded FIFO publication of multiple retired-generation backlogs, and tagged retirement-descriptor recycling.
 
-v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification with append-local fixed-size segments and an eight-level dual-copy radix map. v0.30 integrates that mapper into the real experimental fixed-page primary: across forced migration at `C={32,2048,131072,4194304}`, the largest observed physical append is 147,456 bytes, target lookup remains 20 user-space `pread`s, and all 16 real `SIGKILL` cases expose exact pre/post committed state with scan-free, redo-free frontier recovery. v0.31 then falsifies the mapper's variable-width JSON node representation: effective one-page fanout falls to 154 near the uint64 limit. A fixed 256-bit occupancy bitmap plus 256 uint64 pointer slots uses 2,103 bytes, round-trips all 256 edges at every tested pointer magnitude, and carries a real 255→256 root transition through 5/5 exact `SIGKILL` cases with zero node splits. v0.32 next falsifies mapping-only free-extent reuse: a CRC-valid retired payload becomes visible under a new logical mapping. Intrusive dual-copy lifecycle headers plus a committed retirement cursor bound each cleanup step to `B=3` ownership visits in the fixed experiment, while a 32-page fixed-footprint scrub prevents the demonstrated payload resurrection before reuse publication. Reclaim is 4/4 exact under `SIGKILL`; reuse is 5/5 exact, with scan-free, redo-free recovery. v0.33 then finds that the real primary cannot safely adopt whole-segment ownership while generations are allocated back-to-back: the next generation starts inside the predecessor's final 16-page mapping segment. Aligning every new generation base to the next segment boundary costs at most 15 unused logical page ids, allocates no capacity-scaled physical padding, and lets real migration completion publish v0.32 ownership directly. Two real growth cycles preserve all keys, safely reuse a reclaimed extent after the fixed 32-page scrub, and pass 12/12 process-crash cases with scan-free recovery. v0.34 removes the resulting one-backlog admission restriction with fixed dual-copy retirement descriptors rooted by superblock head/tail/count scalars. Three real retired generations accumulate without cleanup; enqueue stays at one two-page descriptor plus at most one tail rewrite, fixed-budget reclaim touches only the FIFO head, and 19/19 queue publication/reclaim crash cases expose exact committed state with retirement-queue-scan-free recovery.
+v0.28 adds a negative result: simply removing eager full-generation `ftruncate` does **not** bound stale file-length residue while the same capacity-scaled arithmetic page addresses remain. One logical page can be materialized at a sparse offset `Theta(C)` beyond the committed frontier. v0.29 then survives a narrower modeled falsification with append-local fixed-size segments and an eight-level dual-copy radix map. v0.30 integrates that mapper into the real experimental fixed-page primary: across forced migration at `C={32,2048,131072,4194304}`, the largest observed physical append is 147,456 bytes, target lookup remains 20 user-space `pread`s, and all 16 real `SIGKILL` cases expose exact pre/post committed state with scan-free, redo-free frontier recovery. v0.31 then falsifies the mapper's variable-width JSON node representation: effective one-page fanout falls to 154 near the uint64 limit. A fixed 256-bit occupancy bitmap plus 256 uint64 pointer slots uses 2,103 bytes, round-trips all 256 edges at every tested pointer magnitude, and carries a real 255→256 root transition through 5/5 exact `SIGKILL` cases with zero node splits. v0.32 next falsifies mapping-only free-extent reuse: a CRC-valid retired payload becomes visible under a new logical mapping. Intrusive dual-copy lifecycle headers plus a committed retirement cursor bound each cleanup step to `B=3` ownership visits in the fixed experiment, while a 32-page fixed-footprint scrub prevents the demonstrated payload resurrection before reuse publication. Reclaim is 4/4 exact under `SIGKILL`; reuse is 5/5 exact, with scan-free, redo-free recovery. v0.33 then finds that the real primary cannot safely adopt whole-segment ownership while generations are allocated back-to-back: the next generation starts inside the predecessor's final 16-page mapping segment. Aligning every new generation base to the next segment boundary costs at most 15 unused logical page ids, allocates no capacity-scaled physical padding, and lets real migration completion publish v0.32 ownership directly. Two real growth cycles preserve all keys, safely reuse a reclaimed extent after the fixed 32-page scrub, and pass 12/12 process-crash cases with scan-free recovery. v0.34 removes the resulting one-backlog admission restriction with fixed dual-copy retirement descriptors rooted by superblock head/tail/count scalars. Three real retired generations accumulate without cleanup; enqueue stays at one two-page descriptor plus at most one tail rewrite, fixed-budget reclaim touches only the FIFO head, and 19/19 queue publication/reclaim crash cases expose exact committed state with retirement-queue-scan-free recovery. v0.35 then recycles dequeued descriptor page pairs through a tagged free list: queue/free references are `(base_page, incarnation)`, newest committed copy selection precedes tag validation, the three-descriptor real pool serves later generations with zero further descriptor-page append, stale incarnation 1 is rejected after the same page becomes incarnation 2, and 29/29 fresh/reuse/reclaim process-crash cases are exact with descriptor-history-scan-free recovery.
 
 ## Deliberate non-claims
 
@@ -39,13 +39,14 @@ Current evidence does **not** establish:
 - bounded filesystem allocated-block reclamation from file-length truncation;
 - bounded stale-generation residue under the current direct-address layout;
 - mathematically unbounded logical identifiers from the fixed eight-level/64-bit radix namespace;
-- hardware power-loss or torn-write safety from the v0.30–v0.34 process-crash results;
+- hardware power-loss or torn-write safety from the v0.30–v0.35 process-crash results;
 - mathematically unbounded physical identifiers beyond the fixed uint64 pointer model;
+- mathematically unbounded retirement-descriptor identities beyond the finite uint64 incarnation namespace;
 - constant total retired-generation cleanup work; draining `K` retired materialized segments still takes `Theta(K)` ownership visits;
 - filesystem block deallocation, hole punching, or reclamation of now-empty radix metadata nodes;
 - safe whole-segment reclamation for deliberately unaligned logical generation boundaries;
-- constant total retirement-descriptor storage; v0.34 descriptors are append-only and grow with completed-generation history;
-- a real-primary retirement queue depth beyond three simultaneously queued generations; larger v0.34 depths are deterministic controls;
+- constant retirement-descriptor storage independent of peak live backlog; v0.35 stops history-only growth after reusable pool capacity exists, but storage tracks the peak allocated descriptor pool;
+- a real-primary retirement-descriptor pool peak beyond three; the larger v0.35 `H={1,4,16,64,256}` cases are deterministic storage-history controls;
 - a production-ready extent-map, segmented-address, or reclamation replacement;
 - a strong agentic-RAG superiority result.
 
@@ -87,8 +88,9 @@ Current evidence does **not** establish:
 | v0.32 | Can retired mappings be reclaimed incrementally and their extents safely reused? | Intrusive lifecycle state caps tested cleanup at `B=3` segments/step with zero append; mapping-only reuse leaks stale payloads, while a fixed 32-page scrub repairs the demonstrated leak and passes 4/4 reclaim + 5/5 reuse crash cases. |
 | v0.33 | Can real primary-generation retirement use whole-segment ownership safely? | Back-to-back generations share a 16-page mapping segment; segment-aligning new bases costs at most 15 logical ids, removes the overlap, preserves two real growth cycles and reuse, and passes 12/12 exact process-crash cases. |
 | v0.34 | Can multiple completed generations queue for reclamation without blocking later migration? | A dual-copy FIFO descriptor queue accumulates three real retired generations without cleanup; enqueue uses one two-page descriptor plus at most one tail rewrite, reclaim stays head-local under `B=2`, and 19/19 queue crash cases are exact with queue-scan-free recovery. |
+| v0.35 | Can dequeued retirement descriptors be recycled without ABA aliasing or history scans? | Tagged `(page,incarnation)` recycling reuses a three-descriptor real pool with zero later descriptor-page append, rejects the demonstrated stale identity, and passes 29/29 exact fresh/reuse/reclaim crash cases with descriptor-scan-free recovery. |
 
-Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_evidence.json`, and executable `verify_*_results.py` gates.
+Detailed evidence lives in `RESULTS_V0.*.md`, `*_results.json`, `*_results.json.gz`, `*_evidence.json`, and executable `verify_*_results.py` gates.
 
 ## Current storage-layer evidence
 
@@ -248,6 +250,18 @@ After cleanup, the next real migration reuses four reclaimed extents only after 
 
 The result is a bounded-foreground-work claim, not a constant-storage claim. Descriptor pages are append-only in v0.34, and the real-primary queue depth exercised is three; the larger queue counts above are arithmetic/control cases.
 
+### v0.35 — recyclable retirement descriptors
+
+v0.35 replaces append-only retirement-descriptor history with a tagged descriptor free list. Queue roots, queue links, free-list roots, and free-list links all carry `(base_page, incarnation)`. A dequeued descriptor is rewritten `FREE` under its current incarnation; reuse increments that incarnation before the descriptor is republished as `QUEUED`. Dual-copy reads first select the newest record visible at the committed epoch and only then validate the expected tag, so a still-CRC-valid obsolete copy cannot satisfy an old identity after reuse.
+
+For completed-generation controls `H={1,4,16,64,256}`, the append-only baseline consumes `[2,8,32,128,512]` descriptor pages while the serial recyclable control remains `[2,2,2,2,2]`, with zero enqueue history walks. The real primary establishes a three-descriptor/six-page pool across generations `[0,1,2]`, drains it to the free list, then reuses the same physical pairs for later generations. The first reuse needs 2 descriptor `pread`s and 1 descriptor `pwrite`; non-empty reuse needs 4 reads and 2 writes. No additional descriptor pages are appended after that pool exists.
+
+The stale-reference fixture captures physical page 158 at incarnation 1 and then reuses it for generation 3 at incarnation 2. `(158,1)` is rejected with an incarnation mismatch while `(158,2)` resolves the newer descriptor. A direct two-copy regression separately verifies the ordering rule with epoch-1/incarnation-1 and epoch-2/incarnation-2 records.
+
+The process-crash matrix covers **29/29 exact cases** across fresh empty/non-empty enqueue, empty/non-empty reuse, partial head reclaim, and final dequeue-to-free. Recovery performs zero generation-page scan, zero radix-node scan, zero retirement-descriptor scan, and zero logical redo; every second recovery performs zero additional physical truncation. All 258 inserted keys remain visible in the real recycling run.
+
+The surviving storage claim is `Θ(peak concurrently allocated descriptor pool)`, not constant storage for arbitrary live backlog. The tested real pool peak is three, recycled pages remain inside the file rather than shrinking it, and descriptor incarnations are finite uint64 values.
+
 ## Reproducing the hardened path
 
 ```bash
@@ -275,6 +289,7 @@ python run_fixed_width_radix_node_experiment.py
 python run_retired_generation_reclamation_experiment.py
 python run_generation_boundary_reclamation_experiment.py
 python run_retirement_queue_experiment.py
+python run_recyclable_retirement_descriptor_experiment.py
 python verify_scanfree_cascade_results.py
 python verify_recovery_results.py
 python verify_process_recovery_results.py
@@ -303,6 +318,7 @@ python verify_fixed_width_radix_node_results.py
 python verify_retired_generation_reclamation_results.py
 python verify_generation_boundary_reclamation_results.py
 python verify_retirement_queue_results.py
+python verify_recyclable_retirement_descriptor_results.py
 ```
 
 CI runs this chain and uploads the milestone evidence ledgers as artifacts.
@@ -344,19 +360,21 @@ Experimental membership alternative
   -> real migration completion publishes retired ownership for bounded cleanup
   -> dual-copy FIFO retirement descriptors decouple later migrations from earlier cleanup
   -> superblock queue roots keep enqueue head/tail-local and recovery queue-scan-free
+  -> tagged descriptor identities `(page, incarnation)` make physical descriptor reuse explicit
+  -> descriptor free-list reuse stops completed-history-only descriptor growth after sufficient pool capacity
 ```
 
-## Next falsification target — descriptor recycling and identity safety
+## Next falsification target — peak descriptor-pool retention
 
-v0.34 removes cleanup lag from later migration admission, but its retirement descriptors are append-only. Completed and dequeued descriptors become historical residue even after all of their owned segments have been reclaimed.
+v0.35 removes completed-history-only descriptor growth, but it retains every allocated descriptor pair in the internal free pool after backlog peaks. The file does not shrink, and the surviving bound is tied to peak concurrently allocated descriptor capacity.
 
 The next question is:
 
 \[
 \boxed{
-Can retirement descriptors themselves be recycled under a fixed foreground budget
-without ABA-style identity ambiguity, queue-history scans, or crash resurrection?
+Can excess descriptor-pool capacity be safely reduced, returned, or compacted after a backlog peak
+without history walks, ABA aliasing, crash resurrection, or unbounded foreground rewrites?
 }
 \]
 
-v0.35 should compare append-only descriptor history against a bounded descriptor free-list or generation-tagged recycling scheme. It must force descriptor reuse after dequeue, crash before and after recycled identity publication, and verify that stale queue pointers cannot be interpreted as a newer descriptor incarnation. Reject the mechanism if recycling requires a history walk, if descriptor identity can alias after crash, if enqueue/reclaim work grows with descriptor history, or if recovery must scan retired descriptors to determine which incarnation is authoritative.
+The next experiment should force a materially larger live retirement backlog, drain it, then attempt bounded capacity reduction or transfer to a broader allocator. It must preserve tagged identity safety across any physical reuse, keep recovery scan-free, and distinguish internal logical reuse from actual file-length or filesystem-block reclamation. Reject the mechanism if shrinking requires descriptor-history traversal, if a stale tagged reference can resolve after capacity transfer, if process death can resurrect a released descriptor, or if foreground work grows with historical pool size.
