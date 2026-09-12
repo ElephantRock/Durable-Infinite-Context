@@ -50,6 +50,16 @@ jobs:
           name: v0.35-recyclable-retirement-descriptor-diagnostic
           path: recyclable_retirement_descriptor_diagnostic.json
           if-no-files-found: error
+      - name: Run v0.36 descriptor tail release experiment
+        id: v036
+        run: python run_descriptor_tail_release_experiment.py
+      - name: Upload v0.36 failure diagnostic
+        if: ${{ failure() && steps.v036.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.36-descriptor-tail-release-diagnostic
+          path: descriptor_tail_release_diagnostic.json
+          if-no-files-found: error
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -213,4 +223,9 @@ jobs:
         with:
           name: v0.35-recyclable-retirement-descriptor-results
           path: recyclable_retirement_descriptor_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.36-descriptor-tail-release-results
+          path: descriptor_tail_release_results.json
           if-no-files-found: error
