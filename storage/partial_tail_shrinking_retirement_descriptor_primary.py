@@ -8,6 +8,7 @@ from storage.fixed_page_primary import PAGE_SIZE
 from storage.retirement_descriptor_pool import (
     RETIREMENT_DESCRIPTOR_COPIES,
     RETIREMENT_STATUS_FREE,
+    RETIREMENT_STATUS_QUEUED,
     TaggedDescriptorIO,
 )
 from storage.segregated_retirement_descriptor_primary import (
@@ -264,6 +265,33 @@ class PartialTailShrinkingRetirementDescriptorPrimaryStore(
                 tail_incarnation=int(free_incarnation),
                 retirement_arena_fsyncs=1,
             )
+        finally:
+            os.close(arena_fd)
+            os.close(fd)
+
+    def retirement_descriptor_reference(
+        self,
+        base_page: int,
+        incarnation: int,
+        *,
+        expected_status: int = RETIREMENT_STATUS_QUEUED,
+    ) -> dict[str, Any]:
+        fd = self._open()
+        arena_fd = self._open_arena()
+        try:
+            epoch, meta, _slot = self._read_super(fd)
+            arena_pages = self._committed_arena_pages(meta)
+            base = int(base_page)
+            if base < 0 or base + RETIREMENT_DESCRIPTOR_COPIES > arena_pages:
+                raise RuntimeError("descriptor reference lies outside committed arena frontier")
+            payload, _slot, _preads = TaggedDescriptorIO.read(
+                arena_fd,
+                base,
+                epoch,
+                expected_incarnation=int(incarnation),
+                expected_status=int(expected_status),
+            )
+            return payload
         finally:
             os.close(arena_fd)
             os.close(fd)
