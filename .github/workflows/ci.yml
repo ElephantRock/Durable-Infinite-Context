@@ -70,6 +70,16 @@ jobs:
           name: v0.37-segregated-retirement-descriptor-diagnostic
           path: segregated_retirement_descriptor_diagnostic.json
           if-no-files-found: error
+      - name: Run v0.38 partial descriptor tail shrink experiment
+        id: v038
+        run: python run_partial_tail_shrink_experiment.py
+      - name: Upload v0.38 failure diagnostic
+        if: ${{ failure() && steps.v038.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.38-partial-tail-shrink-diagnostic
+          path: partial_tail_shrink_diagnostic.json
+          if-no-files-found: error
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -243,4 +253,9 @@ jobs:
         with:
           name: v0.37-segregated-retirement-descriptor-results
           path: segregated_retirement_descriptor_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.38-partial-tail-shrink-results
+          path: partial_tail_shrink_results.json
           if-no-files-found: error
