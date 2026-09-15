@@ -5,7 +5,7 @@ import json
 
 from run_live_tail_evacuation_experiment import RESULTS_PATH, run
 
-EXPECTED_SHA256 = "dc7081292cdb62928e24f3353ba78422a663afa7421777d8af11a58a58902094"
+EXPECTED_SHA256 = "82902b1ff4cf5d265fe828c9dbfda7b7abfec71501da2608812bbb359391e63f"
 EXPECTED_FAILPOINTS = [
     "retirement_live_tail_destination_staged",
     "retirement_live_tail_predecessor_staged",
@@ -14,6 +14,13 @@ EXPECTED_FAILPOINTS = [
     "retirement_live_tail_relocation_committed",
     "retirement_arena_truncated",
     "retirement_live_tail_relocation_synced",
+]
+EXPECTED_PREDECESSOR_FAILPOINTS = [
+    "retirement_arena_descriptor_written",
+    "retirement_tail_linked",
+    "retirement_arena_synced",
+    "data_synced",
+    "committed",
 ]
 EXPECTED_SCALING_COUNTS = [3, 4, 5, 6]
 
@@ -35,6 +42,138 @@ def _require_scan_free(recovery: dict) -> None:
         raise AssertionError("v0.40 recovery scanned radix nodes")
     if int(recovery.get("retirement_descriptors_scanned", 0)) != 0:
         raise AssertionError("v0.40 recovery scanned retirement descriptors")
+
+
+def _validate_relocation_crashes(crashes: dict) -> None:
+    if list(crashes["failpoints"]) != EXPECTED_FAILPOINTS:
+        raise AssertionError("v0.40 crash failpoint sequence drifted")
+    if int(crashes["case_count"]) != len(EXPECTED_FAILPOINTS):
+        raise AssertionError("v0.40 crash case count drifted")
+    for name in (
+        "all_exact_committed_state_match",
+        "all_recovery_scan_free",
+        "all_second_recovery_idempotent",
+    ):
+        if not bool(crashes[name]):
+            raise AssertionError(f"v0.40 crash aggregate failed: {name}")
+
+    rows = {row["failpoint"]: row for row in crashes["cases"]}
+    for name in EXPECTED_FAILPOINTS[:3]:
+        row = rows[name]
+        if row["expected_state"] != "pre":
+            raise AssertionError(f"v0.40 pre-commit failpoint misclassified: {name}")
+        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
+            raise AssertionError(f"v0.40 pre-commit recovery incorrectly truncated: {name}")
+
+    for name in ("committed", "retirement_live_tail_relocation_committed"):
+        row = rows[name]
+        if row["expected_state"] != "post":
+            raise AssertionError(f"v0.40 post-commit failpoint misclassified: {name}")
+        before_recovery = row["arena_before_recovery"]
+        if int(before_recovery["arena_file_bytes"]) != 24576:
+            raise AssertionError(f"v0.40 post-commit residue physical length drifted: {name}")
+        if int(before_recovery["committed_arena_bytes"]) != 16384:
+            raise AssertionError(f"v0.40 post-commit target length drifted: {name}")
+        if int(before_recovery["uncommitted_arena_tail_bytes"]) != 8192:
+            raise AssertionError(f"v0.40 post-commit residue size drifted: {name}")
+        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 8192:
+            raise AssertionError(f"v0.40 recovery did not remove one descriptor pair: {name}")
+
+    for name in ("retirement_arena_truncated", "retirement_live_tail_relocation_synced"):
+        row = rows[name]
+        if row["expected_state"] != "post":
+            raise AssertionError(f"v0.40 post-truncate failpoint misclassified: {name}")
+        if int(row["arena_before_recovery"]["arena_file_bytes"]) != 16384:
+            raise AssertionError(f"v0.40 post-truncate physical length drifted: {name}")
+        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
+            raise AssertionError(f"v0.40 post-truncate recovery changed arena length: {name}")
+
+    for row in crashes["cases"]:
+        if not bool(row["exact_committed_state_match"]):
+            raise AssertionError(f"v0.40 crash state mismatch: {row['failpoint']}")
+        _require_scan_free(row["first_recovery"])
+        _require_scan_free(row["second_recovery"])
+        if int(row["second_recovery"]["physical_truncated_bytes"]) != 0:
+            raise AssertionError("v0.40 second recovery changed primary physical length")
+        if int(row["second_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
+            raise AssertionError("v0.40 second recovery changed descriptor arena length")
+
+
+def _validate_predecessor_crashes(crashes: dict) -> None:
+    if list(crashes["failpoints"]) != EXPECTED_PREDECESSOR_FAILPOINTS:
+        raise AssertionError("v0.40 tail-predecessor failpoint sequence drifted")
+    if int(crashes["case_count"]) != len(EXPECTED_PREDECESSOR_FAILPOINTS):
+        raise AssertionError("v0.40 tail-predecessor crash case count drifted")
+    for name in (
+        "all_exact_committed_state_match",
+        "all_recovery_scan_free",
+        "all_second_recovery_idempotent",
+    ):
+        if not bool(crashes[name]):
+            raise AssertionError(f"v0.40 tail-predecessor crash aggregate failed: {name}")
+
+    if int(crashes["trigger_index"]) != 32 or crashes["trigger_key"] != "k-0032":
+        raise AssertionError("v0.40 tail-predecessor enqueue trigger drifted")
+    if int(crashes["old_tail_page"]) != 0 or int(crashes["old_tail_incarnation"]) != 1:
+        raise AssertionError("v0.40 tail-predecessor old-tail identity drifted")
+
+    pre = crashes["pre_state"]
+    post = crashes["clean_post_state"]
+    if _pages(pre["queue"]) != [0] or int(pre["queue"]["queue_count"]) != 1:
+        raise AssertionError("v0.40 tail-predecessor pre-state topology drifted")
+    if pre["queue"]["tail_predecessor_page"] is not None:
+        raise AssertionError("v0.40 singleton pre-state unexpectedly has a tail predecessor")
+    if _pages(post["queue"]) != [0, 2] or int(post["queue"]["queue_count"]) != 2:
+        raise AssertionError("v0.40 tail-predecessor post-state topology drifted")
+    if int(post["queue"]["tail_page"]) != 2 or int(post["queue"]["tail_incarnation"]) != 2:
+        raise AssertionError("v0.40 tail-predecessor new tail identity drifted")
+    if int(post["queue"]["tail_predecessor_page"]) != 0:
+        raise AssertionError("v0.40 enqueue did not publish the old tail as predecessor")
+    if int(post["queue"]["tail_predecessor_incarnation"]) != 1:
+        raise AssertionError("v0.40 enqueue predecessor incarnation drifted")
+    if int(pre["arena"]["committed_arena_bytes"]) != 8192:
+        raise AssertionError("v0.40 tail-predecessor pre-state arena drifted")
+    if int(post["arena"]["committed_arena_bytes"]) != 16384:
+        raise AssertionError("v0.40 tail-predecessor post-state arena drifted")
+    if int(crashes["clean_trace"]["retirement_descriptors_enqueued"]) != 1:
+        raise AssertionError("v0.40 tail-predecessor clean insert enqueue count drifted")
+
+    rows = {row["failpoint"]: row for row in crashes["cases"]}
+    for name in EXPECTED_PREDECESSOR_FAILPOINTS[:-1]:
+        row = rows[name]
+        if row["expected_state"] != "pre":
+            raise AssertionError(f"v0.40 tail-predecessor pre-commit failpoint misclassified: {name}")
+        before = row["arena_before_recovery"]
+        if int(before["arena_file_bytes"]) != 16384:
+            raise AssertionError(f"v0.40 tail-predecessor physical residue drifted: {name}")
+        if int(before["committed_arena_bytes"]) != 8192:
+            raise AssertionError(f"v0.40 tail-predecessor committed frontier drifted: {name}")
+        if int(before["uncommitted_arena_tail_bytes"]) != 8192:
+            raise AssertionError(f"v0.40 tail-predecessor residue size drifted: {name}")
+        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 8192:
+            raise AssertionError(f"v0.40 tail-predecessor recovery did not remove one descriptor pair: {name}")
+
+    committed = rows["committed"]
+    if committed["expected_state"] != "post":
+        raise AssertionError("v0.40 tail-predecessor committed failpoint misclassified")
+    if int(committed["arena_before_recovery"]["committed_arena_bytes"]) != 16384:
+        raise AssertionError("v0.40 tail-predecessor committed frontier drifted")
+    if int(committed["arena_before_recovery"]["uncommitted_arena_tail_bytes"]) != 0:
+        raise AssertionError("v0.40 tail-predecessor committed state retains arena residue")
+    if int(committed["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
+        raise AssertionError("v0.40 tail-predecessor committed recovery changed arena length")
+
+    for row in crashes["cases"]:
+        if not bool(row["exact_committed_state_match"]):
+            raise AssertionError(
+                f"v0.40 tail-predecessor crash state mismatch: {row['failpoint']}"
+            )
+        _require_scan_free(row["first_recovery"])
+        _require_scan_free(row["second_recovery"])
+        if int(row["second_recovery"]["physical_truncated_bytes"]) != 0:
+            raise AssertionError("v0.40 tail-predecessor second recovery changed primary length")
+        if int(row["second_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
+            raise AssertionError("v0.40 tail-predecessor second recovery changed arena length")
 
 
 def _validate(payload: dict) -> None:
@@ -153,55 +292,8 @@ def _validate(payload: dict) -> None:
     if bool(refusal_trace["released"]):
         raise AssertionError("v0.40 multiple-free guard unexpectedly released the tail")
 
-    crashes = payload["crash_matrix"]
-    if list(crashes["failpoints"]) != EXPECTED_FAILPOINTS:
-        raise AssertionError("v0.40 crash failpoint sequence drifted")
-    if int(crashes["case_count"]) != len(EXPECTED_FAILPOINTS):
-        raise AssertionError("v0.40 crash case count drifted")
-    for name in (
-        "all_exact_committed_state_match",
-        "all_recovery_scan_free",
-        "all_second_recovery_idempotent",
-    ):
-        if not bool(crashes[name]):
-            raise AssertionError(f"v0.40 crash aggregate failed: {name}")
-    rows = {row["failpoint"]: row for row in crashes["cases"]}
-    for name in EXPECTED_FAILPOINTS[:3]:
-        row = rows[name]
-        if row["expected_state"] != "pre":
-            raise AssertionError(f"v0.40 pre-commit failpoint misclassified: {name}")
-        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
-            raise AssertionError(f"v0.40 pre-commit recovery incorrectly truncated: {name}")
-    for name in ("committed", "retirement_live_tail_relocation_committed"):
-        row = rows[name]
-        if row["expected_state"] != "post":
-            raise AssertionError(f"v0.40 post-commit failpoint misclassified: {name}")
-        before_recovery = row["arena_before_recovery"]
-        if int(before_recovery["arena_file_bytes"]) != 24576:
-            raise AssertionError(f"v0.40 post-commit residue physical length drifted: {name}")
-        if int(before_recovery["committed_arena_bytes"]) != 16384:
-            raise AssertionError(f"v0.40 post-commit target length drifted: {name}")
-        if int(before_recovery["uncommitted_arena_tail_bytes"]) != 8192:
-            raise AssertionError(f"v0.40 post-commit residue size drifted: {name}")
-        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 8192:
-            raise AssertionError(f"v0.40 recovery did not remove one descriptor pair: {name}")
-    for name in ("retirement_arena_truncated", "retirement_live_tail_relocation_synced"):
-        row = rows[name]
-        if row["expected_state"] != "post":
-            raise AssertionError(f"v0.40 post-truncate failpoint misclassified: {name}")
-        if int(row["arena_before_recovery"]["arena_file_bytes"]) != 16384:
-            raise AssertionError(f"v0.40 post-truncate physical length drifted: {name}")
-        if int(row["first_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
-            raise AssertionError(f"v0.40 post-truncate recovery changed arena length: {name}")
-    for row in crashes["cases"]:
-        if not bool(row["exact_committed_state_match"]):
-            raise AssertionError(f"v0.40 crash state mismatch: {row['failpoint']}")
-        _require_scan_free(row["first_recovery"])
-        _require_scan_free(row["second_recovery"])
-        if int(row["second_recovery"]["physical_truncated_bytes"]) != 0:
-            raise AssertionError("v0.40 second recovery changed primary physical length")
-        if int(row["second_recovery"]["retirement_descriptor_arena_truncated_bytes"]) != 0:
-            raise AssertionError("v0.40 second recovery changed descriptor arena length")
+    _validate_relocation_crashes(payload["crash_matrix"])
+    _validate_predecessor_crashes(payload["tail_predecessor_maintenance_crashes"])
 
     scaling = payload["queue_depth_scaling"]
     if list(scaling["target_descriptor_counts"]) != EXPECTED_SCALING_COUNTS:
