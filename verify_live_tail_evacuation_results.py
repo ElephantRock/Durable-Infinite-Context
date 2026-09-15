@@ -5,7 +5,7 @@ import json
 
 from run_live_tail_evacuation_experiment import RESULTS_PATH, run
 
-EXPECTED_SHA256 = "82902b1ff4cf5d265fe828c9dbfda7b7abfec71501da2608812bbb359391e63f"
+EXPECTED_SHA256 = "4a53dd4bfa336d040fd82d599f1050932e4b1746578fd3f15706650519443d18"
 EXPECTED_FAILPOINTS = [
     "retirement_live_tail_destination_staged",
     "retirement_live_tail_predecessor_staged",
@@ -135,8 +135,18 @@ def _validate_predecessor_crashes(crashes: dict) -> None:
         raise AssertionError("v0.40 tail-predecessor pre-state arena drifted")
     if int(post["arena"]["committed_arena_bytes"]) != 16384:
         raise AssertionError("v0.40 tail-predecessor post-state arena drifted")
-    if int(crashes["clean_trace"]["retirement_descriptors_enqueued"]) != 1:
-        raise AssertionError("v0.40 tail-predecessor clean insert enqueue count drifted")
+
+    expected_clean_trace = {
+        "retirement_descriptors_enqueued": 1,
+        "retirement_descriptor_preads": 2,
+        "retirement_descriptor_pwrites": 2,
+        "retirement_arena_pages": 4,
+        "retirement_queue_count": 2,
+    }
+    if crashes["clean_trace"] != expected_clean_trace:
+        raise AssertionError("v0.40 tail-predecessor compact clean trace drifted")
+    if "allocated_bytes" in crashes["clean_trace"]:
+        raise AssertionError("v0.40 canonical predecessor trace retained filesystem allocation evidence")
 
     rows = {row["failpoint"]: row for row in crashes["cases"]}
     for name in EXPECTED_PREDECESSOR_FAILPOINTS[:-1]:
