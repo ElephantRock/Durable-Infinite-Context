@@ -106,9 +106,64 @@ def _candidate_release_case() -> dict[str, Any]:
         }
 
 
+def _multiple_free_refusal_case() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="dic-v040-multifree-") as tmp:
+        path = Path(tmp) / "primary.pages"
+        store = LiveTailEvacuationRetirementDescriptorPrimaryStore(str(path))
+        store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=4096)
+        index = base._insert_until_queue_count(store, index=0, target=4)
+
+        while int(store.retirement_queue_snapshot()["queue_count"]) > 2:
+            trace = store.reclaim_step(budget=base.SEGMENT_BUDGET)
+            if int(trace.retirement_descriptors_scanned) != 0:
+                raise AssertionError("v0.40 multiple-free setup scanned descriptor history")
+
+        before = store.retirement_queue_snapshot()
+        arena_before = store.descriptor_arena_diagnostic()
+        if int(before["queue_count"]) != 2:
+            raise AssertionError("v0.40 multiple-free fixture live queue depth drifted")
+        if int(before["descriptor_free_count"]) != 2:
+            raise AssertionError("v0.40 multiple-free fixture did not expose two free descriptors")
+        if int(before["tail_page"]) != 6 or int(before["tail_predecessor_page"]) != 4:
+            raise AssertionError("v0.40 multiple-free fixture lost live physical queue tail")
+
+        trace = store.evacuate_live_retirement_arena_tail_step()
+        after = store.retirement_queue_snapshot()
+        arena_after = store.descriptor_arena_diagnostic()
+        if trace.released:
+            raise AssertionError("v0.40 multiple-free guard unexpectedly relocated live tail")
+        if int(trace.retirement_descriptor_preads) != 0:
+            raise AssertionError("v0.40 multiple-free guard read descriptor topology")
+        if int(trace.retirement_descriptor_pwrites) != 0:
+            raise AssertionError("v0.40 multiple-free guard wrote descriptor topology")
+        if int(trace.retirement_descriptors_scanned) != 0:
+            raise AssertionError("v0.40 multiple-free guard scanned descriptor history")
+        if int(trace.live_descriptor_relocations) != 0:
+            raise AssertionError("v0.40 multiple-free guard reported a relocation")
+        if before != after or arena_before != arena_after:
+            raise AssertionError("v0.40 multiple-free refusal changed committed/physical state")
+
+        return {
+            "keys_inserted": index,
+            "queue_before": before,
+            "arena_before": arena_before,
+            "trace": trace.to_dict(),
+            "queue_after": after,
+            "arena_after": arena_after,
+            "exact_state_unchanged": before == after and arena_before == arena_after,
+            "refused_before_descriptor_io": (
+                int(trace.retirement_descriptor_preads) == 0
+                and int(trace.retirement_descriptor_pwrites) == 0
+                and int(trace.retirement_descriptors_scanned) == 0
+                and int(trace.live_descriptor_relocations) == 0
+            ),
+        }
+
+
 def run_live_tail_evacuation_experiment() -> dict[str, Any]:
     control = base._v039_control_case()
     candidate = _candidate_release_case()
+    multiple_free_refusal = _multiple_free_refusal_case()
     crashes = base._crash_matrix()
     scaling = base._scaling()
     return {
@@ -116,6 +171,7 @@ def run_live_tail_evacuation_experiment() -> dict[str, Any]:
         "survived": True,
         "v039_control": control,
         "live_tail_evacuation": candidate,
+        "multiple_free_refusal": multiple_free_refusal,
         "crash_matrix": crashes,
         "queue_depth_scaling": scaling,
         "claim": (
