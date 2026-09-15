@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Callable
 
 from storage.live_tail_evacuation_retirement_descriptor_primary import (
@@ -61,7 +62,7 @@ class BoundedLiveTailEvacuationRetirementDescriptorPrimaryStore(
                     tail_was_queue_tail=bool(tail_is_queue_tail),
                 )
         finally:
-            fd.close() if hasattr(fd, "close") else None
+            os.close(fd)
 
         return super().evacuate_live_retirement_arena_tail_step(failpoint=failpoint)
 
