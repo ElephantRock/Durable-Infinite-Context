@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from simulator.bidirectional_tail_unlink import run_bidirectional_tail_unlink_experiment
+from simulator.bidirectional_topology_crash import run_bidirectional_topology_crash_experiment
 from simulator.normalized_membership import run_v016_normalized_case
 
 ROOT = Path(__file__).resolve().parent
@@ -104,6 +105,25 @@ def _validate_candidate(row: dict) -> None:
         raise AssertionError("v0.39 second recovery was not idempotent")
 
 
+def _validate_topology_crashes(row: dict) -> None:
+    if int(row["case_count"]) != 8:
+        raise AssertionError("v0.39 topology crash-matrix case count drifted")
+    if not bool(row["all_exact_committed_state_match"]):
+        raise AssertionError("v0.39 predecessor topology publication is not crash exact")
+    if not bool(row["all_recovery_scan_free"]):
+        raise AssertionError("v0.39 topology recovery scanned history")
+    if not bool(row["all_second_recovery_idempotent"]):
+        raise AssertionError("v0.39 topology second recovery was not idempotent")
+    push = row["predecessor_push"]
+    pop = row["free_head_reuse"]
+    if int(push["case_count"]) != 4 or int(pop["case_count"]) != 4:
+        raise AssertionError("v0.39 topology crash submatrix drifted")
+    if int(push["clean_post_state"]["queue"]["descriptor_free_head_page"]) != 2:
+        raise AssertionError("v0.39 clean predecessor push did not publish page 2 head")
+    if int(pop["clean_post_state"]["queue"]["descriptor_free_head_page"]) != 4:
+        raise AssertionError("v0.39 clean free-head reuse did not publish page 4 head")
+
+
 def run() -> dict:
     semantic_guard = _run_phase(
         "semantic_guard",
@@ -117,6 +137,12 @@ def run() -> dict:
     _run_phase("semantic_guard_validation", lambda: _require_semantic_guard(semantic_guard))
     candidate = _run_phase("bidirectional_tail_unlink", run_bidirectional_tail_unlink_experiment)
     _run_phase("candidate_validation", lambda: _validate_candidate(candidate))
+    topology_crashes = _run_phase(
+        "bidirectional_topology_crashes", run_bidirectional_topology_crash_experiment
+    )
+    _run_phase(
+        "topology_crash_validation", lambda: _validate_topology_crashes(topology_crashes)
+    )
 
     out = {
         "experiment": "v0.39_bidirectional_free_tail_unlink",
@@ -129,6 +155,7 @@ def run() -> dict:
             "partial_assembly_equal": semantic_guard["partial_assembly_equal"],
         },
         "bidirectional_tail_unlink": candidate,
+        "topology_maintenance_crashes": topology_crashes,
         "observe": (
             "v0.38 can shrink a live descriptor arena only when the free-list head is itself the physical tail; "
             "a free physical tail buried behind another free node remains unreclaimable without stronger current topology."
@@ -145,7 +172,8 @@ def run() -> dict:
         "prediction": (
             "on a real free chain [2 -> 4] with page 4 as physical tail and one live queued descriptor, v0.38 will "
             "no-op while v0.39 will read only tail and predecessor, rewrite only predecessor, publish arena 6 -> 4 "
-            "pages, reject stale page-4 identity across later reuse, and recover exactly across six SIGKILL stages."
+            "pages, reject stale page-4 identity across later reuse, recover exactly across six shrink SIGKILL stages, "
+            "and publish predecessor push/free-head reuse exactly across eight additional process-crash cases."
         ),
         "result": (
             "candidate result is determined by the executable v0.39 simulator and is bounded to current free-topology "
