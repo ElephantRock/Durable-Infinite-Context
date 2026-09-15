@@ -5,7 +5,7 @@ import json
 import os
 import signal
 
-from storage.live_tail_evacuation_retirement_descriptor_primary import (
+from storage.bounded_live_tail_evacuation_retirement_descriptor_primary import (
     LiveTailEvacuationRetirementDescriptorPrimaryStore,
 )
 
