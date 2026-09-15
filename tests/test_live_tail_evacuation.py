@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from storage.live_tail_evacuation_retirement_descriptor_primary import (
+from storage.bounded_live_tail_evacuation_retirement_descriptor_primary import (
     LiveTailEvacuationRetirementDescriptorPrimaryStore,
 )
 from storage.retirement_descriptor_pool import RETIREMENT_STATUS_QUEUED
@@ -25,7 +25,7 @@ class LiveTailEvacuationTests(unittest.TestCase):
                 raise AssertionError("fixture did not reach requested retirement queue depth")
         return index
 
-    def test_live_physical_queue_tail_moves_into_lower_free_head(self) -> None:
+    def test_live_physical_queue_tail_moves_into_sole_lower_free_head(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dic-v040-focused-") as tmp:
             path = Path(tmp) / "primary.pages"
             store = LiveTailEvacuationRetirementDescriptorPrimaryStore(str(path))
@@ -87,6 +87,30 @@ class LiveTailEvacuationTests(unittest.TestCase):
                 expected_status=RETIREMENT_STATUS_QUEUED,
             )
             self.assertIsNotNone(current["generation"])
+
+    def test_multiple_free_descriptors_are_refused_before_descriptor_io(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dic-v040-multifree-") as tmp:
+            path = Path(tmp) / "primary.pages"
+            store = LiveTailEvacuationRetirementDescriptorPrimaryStore(str(path))
+            store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=4096)
+
+            self._insert_until_queue_count(store, index=0, target=4)
+            while int(store.retirement_queue_snapshot()["queue_count"]) > 2:
+                store.reclaim_step(budget=2)
+
+            before = store.retirement_queue_snapshot()
+            self.assertEqual(int(before["descriptor_free_count"]), 2)
+            self.assertEqual(int(before["tail_page"]), 6)
+            self.assertEqual(int(before["tail_predecessor_page"]), 4)
+
+            trace = store.evacuate_live_retirement_arena_tail_step()
+            after = store.retirement_queue_snapshot()
+            self.assertFalse(trace.released)
+            self.assertEqual(trace.retirement_descriptor_preads, 0)
+            self.assertEqual(trace.retirement_descriptor_pwrites, 0)
+            self.assertEqual(trace.retirement_descriptors_scanned, 0)
+            self.assertEqual(trace.live_descriptor_relocations, 0)
+            self.assertEqual(before, after)
 
 
 if __name__ == "__main__":
