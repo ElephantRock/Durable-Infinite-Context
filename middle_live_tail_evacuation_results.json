@@ -1,0 +1,340 @@
+{
+  "claim_boundary": {
+    "physical_tail_predecessor_is_queue_head": true,
+    "physical_tail_successor_is_queue_tail": true,
+    "queue_count": 3,
+    "queue_or_history_walk": false,
+    "sole_free_destination": true
+  },
+  "experiment": "v0.42-middle-live-tail-evacuation",
+  "middle_tail_evacuation": {
+    "after": {
+      "arena_pages": 6,
+      "free": [],
+      "free_head": null,
+      "head": 4,
+      "physical_tail": 4,
+      "physical_tail_predecessor": null,
+      "queue": [
+        4,
+        0,
+        2
+      ],
+      "tail": 2,
+      "tail_predecessor": 0
+    },
+    "before": {
+      "arena_pages": 8,
+      "free": [
+        0
+      ],
+      "free_head": 0,
+      "head": 4,
+      "physical_tail": 6,
+      "physical_tail_predecessor": 4,
+      "queue": [
+        4,
+        6,
+        2
+      ],
+      "tail": 2,
+      "tail_predecessor": 6
+    },
+    "relocated_payload_preserved": true,
+    "stale_destination_rejected": true,
+    "stale_tail_rejected": true,
+    "successor_identity_preserved": true,
+    "trace": {
+      "destination_new_incarnation": 6,
+      "destination_old_incarnation": 1,
+      "destination_page": 0,
+      "live_descriptor_relocations": 1,
+      "new_physical_tail_incarnation": 3,
+      "new_physical_tail_page": 4,
+      "physical_tail_incarnation": 4,
+      "physical_tail_page": 6,
+      "predecessor_incarnation": 3,
+      "predecessor_page": 4,
+      "released": true,
+      "retirement_arena_bytes_released": 8192,
+      "retirement_arena_fsyncs": 2,
+      "retirement_arena_pages_after": 6,
+      "retirement_arena_pages_before": 8,
+      "retirement_arena_pages_released": 2,
+      "retirement_descriptor_free_count_after": 0,
+      "retirement_descriptor_free_count_before": 1,
+      "retirement_descriptor_preads": 8,
+      "retirement_descriptor_pwrites": 2,
+      "retirement_descriptors_scanned": 0,
+      "successor_incarnation": 5,
+      "successor_page": 2
+    },
+    "trigger_key": "k-0256"
+  },
+  "physical_tail_authority_crashes": {
+    "all_exact_committed_state_match": true,
+    "all_recovery_scan_free": true,
+    "all_second_recovery_idempotent": true,
+    "case_count": 5,
+    "cases": [
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_descriptor_reused",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_tail_linked",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_arena_synced",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "data_synced",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 1949696,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "post",
+        "failpoint": "committed",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      }
+    ],
+    "clean_trace": {
+      "retirement_arena_pages": 8,
+      "retirement_descriptor_free_count": 1,
+      "retirement_descriptor_preads": 6,
+      "retirement_descriptor_pwrites": 3,
+      "retirement_descriptor_reuses": 1,
+      "retirement_queue_count": 3
+    },
+    "failpoints": [
+      "retirement_descriptor_reused",
+      "retirement_tail_linked",
+      "retirement_arena_synced",
+      "data_synced",
+      "committed"
+    ],
+    "post_topology": {
+      "arena_pages": 8,
+      "free": [
+        0
+      ],
+      "free_head": 0,
+      "head": 4,
+      "physical_tail": 6,
+      "physical_tail_predecessor": 4,
+      "queue": [
+        4,
+        6,
+        2
+      ],
+      "tail": 2,
+      "tail_predecessor": 6
+    },
+    "pre_topology": {
+      "arena_pages": 8,
+      "free": [
+        2,
+        0
+      ],
+      "free_head": 2,
+      "head": 4,
+      "physical_tail": 6,
+      "physical_tail_predecessor": 4,
+      "queue": [
+        4,
+        6
+      ],
+      "tail": 6,
+      "tail_predecessor": 4
+    },
+    "trigger_index": 256,
+    "trigger_key": "k-0256"
+  },
+  "relocation_crash_matrix": {
+    "all_exact_committed_state_match": true,
+    "all_recovery_scan_free": true,
+    "all_second_recovery_idempotent": true,
+    "case_count": 7,
+    "cases": [
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_middle_tail_destination_staged",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_middle_tail_predecessor_staged",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 32768,
+        "exact": true,
+        "expected_state": "pre",
+        "failpoint": "retirement_middle_tail_dependencies_synced",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 24576,
+        "exact": true,
+        "expected_state": "post",
+        "failpoint": "committed",
+        "first_arena_truncated_bytes": 8192,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 32768,
+        "committed_arena_bytes_before_recovery": 24576,
+        "exact": true,
+        "expected_state": "post",
+        "failpoint": "retirement_middle_tail_relocation_committed",
+        "first_arena_truncated_bytes": 8192,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 24576,
+        "committed_arena_bytes_before_recovery": 24576,
+        "exact": true,
+        "expected_state": "post",
+        "failpoint": "retirement_arena_truncated",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      },
+      {
+        "arena_file_bytes_before_recovery": 24576,
+        "committed_arena_bytes_before_recovery": 24576,
+        "exact": true,
+        "expected_state": "post",
+        "failpoint": "retirement_middle_tail_relocation_synced",
+        "first_arena_truncated_bytes": 0,
+        "first_primary_truncated_bytes": 0,
+        "scan_free": true,
+        "second_idempotent": true
+      }
+    ],
+    "failpoints": [
+      "retirement_middle_tail_destination_staged",
+      "retirement_middle_tail_predecessor_staged",
+      "retirement_middle_tail_dependencies_synced",
+      "committed",
+      "retirement_middle_tail_relocation_committed",
+      "retirement_arena_truncated",
+      "retirement_middle_tail_relocation_synced"
+    ]
+  },
+  "survived": true,
+  "v041_control": {
+    "after": {
+      "arena_pages": 8,
+      "free": [
+        0
+      ],
+      "free_head": 0,
+      "head": 4,
+      "physical_tail": null,
+      "physical_tail_predecessor": null,
+      "queue": [
+        4,
+        6,
+        2
+      ],
+      "tail": 2,
+      "tail_predecessor": 6
+    },
+    "before": {
+      "arena_pages": 8,
+      "free": [
+        0
+      ],
+      "free_head": 0,
+      "head": 4,
+      "physical_tail": null,
+      "physical_tail_predecessor": null,
+      "queue": [
+        4,
+        6,
+        2
+      ],
+      "tail": 2,
+      "tail_predecessor": 6
+    },
+    "exact_state_unchanged": true,
+    "trace": {
+      "destination_new_incarnation": null,
+      "destination_old_incarnation": null,
+      "destination_page": null,
+      "live_descriptor_relocations": 0,
+      "predecessor_incarnation": null,
+      "predecessor_page": null,
+      "released": false,
+      "retirement_arena_bytes_released": 0,
+      "retirement_arena_fsyncs": 0,
+      "retirement_arena_pages_after": 8,
+      "retirement_arena_pages_before": 8,
+      "retirement_arena_pages_released": 0,
+      "retirement_descriptor_free_count_after": 1,
+      "retirement_descriptor_free_count_before": 1,
+      "retirement_descriptor_preads": 0,
+      "retirement_descriptor_pwrites": 0,
+      "retirement_descriptors_scanned": 0
+    },
+    "trigger_key": "k-0256"
+  }
+}
