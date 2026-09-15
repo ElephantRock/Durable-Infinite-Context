@@ -18,6 +18,13 @@ EVACUATION_FAILPOINTS = {
     "retirement_arena_truncated",
     "retirement_live_tail_relocation_synced",
 }
+INSERT_FAILPOINTS = {
+    "retirement_arena_descriptor_written",
+    "retirement_tail_linked",
+    "retirement_arena_synced",
+    "data_synced",
+    "committed",
+}
 
 
 def abrupt_kill() -> None:
@@ -41,6 +48,10 @@ def main() -> None:
     evacuate = sub.add_parser("evacuate")
     evacuate.add_argument("--failpoint", choices=sorted(EVACUATION_FAILPOINTS), required=True)
 
+    insert = sub.add_parser("insert")
+    insert.add_argument("--key", required=True)
+    insert.add_argument("--failpoint", choices=sorted(INSERT_FAILPOINTS), required=True)
+
     inspect = sub.add_parser("inspect")
     inspect.add_argument("--key", action="append", default=[])
     sub.add_parser("recover")
@@ -51,6 +62,10 @@ def main() -> None:
     if args.command == "evacuate":
         store.evacuate_live_retirement_arena_tail_step(failpoint=killer(args.failpoint))
         raise AssertionError("requested evacuation failpoint was not reached")
+
+    if args.command == "insert":
+        store.insert(args.key, failpoint=killer(args.failpoint))
+        raise AssertionError("requested insert failpoint was not reached")
 
     if args.command == "inspect":
         print(
