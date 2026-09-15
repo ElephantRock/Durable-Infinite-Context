@@ -90,6 +90,16 @@ jobs:
           name: v0.39-bidirectional-tail-unlink-diagnostic
           path: bidirectional_tail_unlink_diagnostic.json
           if-no-files-found: error
+      - name: Run v0.40 bounded live queue-tail evacuation experiment
+        id: v040
+        run: python run_live_tail_evacuation_experiment.py
+      - name: Upload v0.40 failure diagnostic
+        if: ${{ failure() && steps.v040.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.40-live-tail-evacuation-diagnostic
+          path: live_tail_evacuation_diagnostic.json
+          if-no-files-found: error
       - run: python verify_scanfree_cascade_results.py
       - run: python verify_recovery_results.py
       - run: python verify_process_recovery_results.py
@@ -273,4 +283,9 @@ jobs:
         with:
           name: v0.39-bidirectional-tail-unlink-results
           path: bidirectional_tail_unlink_results.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.40-live-tail-evacuation-results
+          path: live_tail_evacuation_results.json
           if-no-files-found: error
