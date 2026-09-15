@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import signal
 import subprocess
 import sys
@@ -82,8 +81,6 @@ def _build_predecessor_push_fixture(path: Path) -> dict[str, Any]:
     if int(snapshot["head_page"]) != 2 or int(snapshot["descriptor_free_head_page"]) != 4:
         raise AssertionError("v0.39 push fixture did not expose queued page 2 ahead of free page 4")
 
-    # Advance page 2 until one bounded reclaim step will dequeue it and push it ahead
-    # of the existing free head. These partial updates do not change free topology.
     while True:
         snapshot = store.retirement_queue_snapshot()
         head = snapshot["descriptors"][0]
@@ -93,11 +90,10 @@ def _build_predecessor_push_fixture(path: Path) -> dict[str, Any]:
             break
         store.reclaim_step(budget=SEGMENT_BUDGET)
 
-    ready = store.retirement_queue_snapshot()
     return {
         "next_key_index": index,
         "keys": tuple(_next_key(i) for i in range(index)),
-        "ready": ready,
+        "ready": store.retirement_queue_snapshot(),
     }
 
 
@@ -192,8 +188,8 @@ def _free_head_reuse_crash_matrix() -> dict[str, Any]:
         fixture, trigger_key = _prepare_reuse_trigger(base_path)
         base = BidirectionalRetirementDescriptorPrimaryStore(str(base_path))
         keys_before = tuple(fixture["keys"])
-        keys_after = (*keys_before, trigger_key)
-        pre = _semantic_state(base, keys_before)
+        observed_keys = (*keys_before, trigger_key)
+        pre = _semantic_state(base, observed_keys)
         if int(pre["queue"]["descriptor_free_head_page"]) != 2:
             raise AssertionError("v0.39 reuse crash fixture must begin with free head page 2")
 
@@ -201,7 +197,7 @@ def _free_head_reuse_crash_matrix() -> dict[str, Any]:
         _copy_candidate_store(base_path, clean_path)
         clean = BidirectionalRetirementDescriptorPrimaryStore(str(clean_path))
         clean_trace = clean.insert(trigger_key)
-        post = _semantic_state(clean, keys_after)
+        post = _semantic_state(clean, observed_keys)
         if int(clean_trace.retirement_descriptors_enqueued) <= 0:
             raise AssertionError("v0.39 reuse crash trigger did not enqueue a retirement descriptor")
         if int(post["queue"]["descriptor_free_count"]) != 1:
@@ -226,7 +222,6 @@ def _free_head_reuse_crash_matrix() -> dict[str, Any]:
             crashed = BidirectionalRetirementDescriptorPrimaryStore(str(crash_path))
             one, two = _recover_twice(crashed)
             expected = post if failpoint == "committed" else pre
-            observed_keys = keys_after if failpoint == "committed" else keys_before
             recovered = _semantic_state(crashed, observed_keys)
             if recovered != expected:
                 raise AssertionError(f"v0.39 free-pop {failpoint} recovered wrong state")
