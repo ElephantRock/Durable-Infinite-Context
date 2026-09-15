@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from simulator.bidirectional_tail_scaling import run_bidirectional_tail_scaling_experiment
 from simulator.bidirectional_tail_unlink import run_bidirectional_tail_unlink_experiment
 from simulator.bidirectional_topology_crash import run_bidirectional_topology_crash_experiment
 from simulator.normalized_membership import run_v016_normalized_case
@@ -124,6 +125,26 @@ def _validate_topology_crashes(row: dict) -> None:
         raise AssertionError("v0.39 clean free-head reuse did not publish page 4 head")
 
 
+def _validate_scaling(row: dict) -> None:
+    if list(row["target_descriptor_counts"]) != [3, 4, 5, 6]:
+        raise AssertionError("v0.39 free-chain scaling domain drifted")
+    if not bool(row["all_constant_shrink_work"]):
+        raise AssertionError("v0.39 shrink work depends on free-chain length")
+    if [int(item["free_chain_length_before"]) for item in row["rows"]] != [2, 3, 4, 5]:
+        raise AssertionError("v0.39 free-chain lengths drifted")
+    for item in row["rows"]:
+        if int(item["retirement_descriptor_preads"]) != 4:
+            raise AssertionError("v0.39 scaled shrink read count drifted")
+        if int(item["retirement_descriptor_pwrites"]) != 1:
+            raise AssertionError("v0.39 scaled shrink write count drifted")
+        if int(item["retirement_descriptors_scanned"]) != 0:
+            raise AssertionError("v0.39 scaled shrink scanned descriptor history")
+        if int(item["candidate_relocations"]) != 0:
+            raise AssertionError("v0.39 scaled shrink relocated live descriptors")
+        if int(item["arena_pages_before"]) - int(item["arena_pages_after"]) != 2:
+            raise AssertionError("v0.39 scaled shrink did not release exactly one pair")
+
+
 def run() -> dict:
     semantic_guard = _run_phase(
         "semantic_guard",
@@ -143,6 +164,8 @@ def run() -> dict:
     _run_phase(
         "topology_crash_validation", lambda: _validate_topology_crashes(topology_crashes)
     )
+    scaling = _run_phase("bidirectional_tail_scaling", run_bidirectional_tail_scaling_experiment)
+    _run_phase("scaling_validation", lambda: _validate_scaling(scaling))
 
     out = {
         "experiment": "v0.39_bidirectional_free_tail_unlink",
@@ -156,6 +179,7 @@ def run() -> dict:
         },
         "bidirectional_tail_unlink": candidate,
         "topology_maintenance_crashes": topology_crashes,
+        "free_chain_scaling": scaling,
         "observe": (
             "v0.38 can shrink a live descriptor arena only when the free-list head is itself the physical tail; "
             "a free physical tail buried behind another free node remains unreclaimable without stronger current topology."
@@ -173,7 +197,8 @@ def run() -> dict:
             "on a real free chain [2 -> 4] with page 4 as physical tail and one live queued descriptor, v0.38 will "
             "no-op while v0.39 will read only tail and predecessor, rewrite only predecessor, publish arena 6 -> 4 "
             "pages, reject stale page-4 identity across later reuse, recover exactly across six shrink SIGKILL stages, "
-            "and publish predecessor push/free-head reuse exactly across eight additional process-crash cases."
+            "publish predecessor push/free-head reuse exactly across eight additional process-crash cases, and hold "
+            "shrink work at 4 descriptor preads / 1 pwrite / 0 scans as free-chain length grows from 2 to 5."
         ),
         "result": (
             "candidate result is determined by the executable v0.39 simulator and is bounded to current free-topology "
