@@ -136,6 +136,18 @@ def run_live_tail_predecessor_crash_experiment() -> dict[str, Any]:
         if int(post_queue["tail_page"]) == old_tail_page:
             raise AssertionError("v0.40 clean enqueue did not advance queue tail")
 
+        # Keep the canonical evidence portable: the generic insert trace includes
+        # filesystem allocation observations (`allocated_bytes`) that can vary across
+        # filesystems even when logical state is identical. Freeze only the fields
+        # relevant to this predecessor-maintenance experiment.
+        clean_trace_row = {
+            "retirement_descriptors_enqueued": int(clean_trace.retirement_descriptors_enqueued),
+            "retirement_descriptor_preads": int(clean_trace.retirement_descriptor_preads),
+            "retirement_descriptor_pwrites": int(clean_trace.retirement_descriptor_pwrites),
+            "retirement_arena_pages": int(clean_trace.retirement_arena_pages),
+            "retirement_queue_count": int(clean_trace.retirement_queue_count),
+        }
+
         cases: list[dict[str, Any]] = []
         for failpoint in INSERT_FAILPOINTS:
             crash_path = directory / f"crash-{failpoint}.pages"
@@ -186,7 +198,7 @@ def run_live_tail_predecessor_crash_experiment() -> dict[str, Any]:
             "old_tail_incarnation": old_tail_incarnation,
             "pre_state": pre,
             "clean_post_state": post,
-            "clean_trace": clean_trace.to_dict(),
+            "clean_trace": clean_trace_row,
             "cases": cases,
             "all_exact_committed_state_match": all(
                 bool(row["exact_committed_state_match"]) for row in cases
