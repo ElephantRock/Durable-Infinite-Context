@@ -44,6 +44,41 @@ def decode_reference(page: int, incarnation: int) -> tuple[int | None, int | Non
     return int(page), int(incarnation)
 
 
+def _encode_free_predecessor(
+    page: int | None,
+    incarnation: int | None,
+) -> tuple[int, int]:
+    """Encode v0.39 predecessor authority in fields unused by FREE records.
+
+    Historical FREE records encode both fields as NULL_PAGE. Keeping that exact null
+    encoding preserves their bytes and canonical outputs. A non-null predecessor uses
+    the former generation/cursor slots as (page, incarnation).
+    """
+    if page is None:
+        if incarnation is not None:
+            raise ValueError("null free predecessor page requires null incarnation")
+        return NULL_PAGE, NULL_PAGE
+    if incarnation is None or int(incarnation) <= 0:
+        raise ValueError("free predecessor requires positive incarnation")
+    if int(page) < 0 or int(page) > MAX_PHYSICAL_PAGE_ID:
+        raise ValueError("free predecessor page exceeds uint64")
+    if int(incarnation) > NULL_PAGE:
+        raise ValueError("free predecessor incarnation exceeds uint64")
+    return int(page), int(incarnation)
+
+
+def _decode_free_predecessor(page: int, incarnation: int) -> tuple[int | None, int | None]:
+    if int(page) == NULL_PAGE:
+        if int(incarnation) != NULL_PAGE:
+            raise ValueError("null free predecessor has non-null incarnation")
+        return None, None
+    if int(page) < 0 or int(page) > MAX_PHYSICAL_PAGE_ID:
+        raise ValueError("free predecessor page exceeds uint64")
+    if int(incarnation) <= 0 or int(incarnation) > NULL_PAGE:
+        raise ValueError("free predecessor incarnation is invalid")
+    return int(page), int(incarnation)
+
+
 def encode_descriptor(
     epoch: int,
     *,
@@ -54,6 +89,8 @@ def encode_descriptor(
     remaining_segments: int,
     next_descriptor_page: int | None,
     next_descriptor_incarnation: int | None,
+    prev_descriptor_page: int | None = None,
+    prev_descriptor_incarnation: int | None = None,
 ) -> bytes:
     if not 0 <= int(epoch) <= NULL_PAGE:
         raise ValueError("retirement epoch exceeds uint64")
@@ -63,6 +100,8 @@ def encode_descriptor(
         raise ValueError("unknown retirement descriptor status")
 
     if int(status) == RETIREMENT_STATUS_QUEUED:
+        if prev_descriptor_page is not None or prev_descriptor_incarnation is not None:
+            raise ValueError("queued descriptor cannot retain free predecessor authority")
         if generation is None or not 0 <= int(generation) <= NULL_PAGE:
             raise ValueError("queued descriptor requires uint64 generation")
         if cursor_header_page is None:
@@ -76,8 +115,10 @@ def encode_descriptor(
     else:
         if generation is not None or cursor_header_page is not None or int(remaining_segments) != 0:
             raise ValueError("free descriptor cannot retain retirement ownership")
-        generation_value = NULL_PAGE
-        cursor_value = NULL_PAGE
+        generation_value, cursor_value = _encode_free_predecessor(
+            prev_descriptor_page,
+            prev_descriptor_incarnation,
+        )
 
     next_page, next_incarnation = encode_reference(
         next_descriptor_page, next_descriptor_incarnation
@@ -133,18 +174,26 @@ def decode_descriptor(data: bytes) -> tuple[int, dict[str, Any]] | None:
     except ValueError:
         return None
 
+    predecessor_page: int | None = None
+    predecessor_incarnation: int | None = None
     if int(status) == RETIREMENT_STATUS_QUEUED:
         if int(remaining) <= 0 or int(cursor) == NULL_PAGE:
             return None
         payload_generation: int | None = int(generation)
         payload_cursor: int | None = int(cursor)
     else:
-        if int(generation) != NULL_PAGE or int(cursor) != NULL_PAGE or int(remaining) != 0:
+        if int(remaining) != 0:
+            return None
+        try:
+            predecessor_page, predecessor_incarnation = _decode_free_predecessor(
+                int(generation), int(cursor)
+            )
+        except ValueError:
             return None
         payload_generation = None
         payload_cursor = None
 
-    return int(epoch), {
+    payload = {
         "incarnation": int(incarnation),
         "status": int(status),
         "generation": payload_generation,
@@ -153,6 +202,12 @@ def decode_descriptor(data: bytes) -> tuple[int, dict[str, Any]] | None:
         "next_descriptor_page": decoded_next_page,
         "next_descriptor_incarnation": decoded_next_incarnation,
     }
+    # Preserve historical decoded payload shape when predecessor authority is null.
+    # v0.35-v0.38 canonical JSON therefore remains byte-stable.
+    if predecessor_page is not None:
+        payload["prev_descriptor_page"] = predecessor_page
+        payload["prev_descriptor_incarnation"] = predecessor_incarnation
+    return int(epoch), payload
 
 
 class TaggedDescriptorIO:
