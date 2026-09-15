@@ -4,13 +4,38 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from simulator.bidirectional_tail_unlink import _insert_until_queue_count, _next_key
+from simulator.bidirectional_tail_unlink import _next_key
 from storage.bidirectional_retirement_descriptor_primary import (
     BidirectionalRetirementDescriptorPrimaryStore,
 )
 
 SETUP_RECLAIM_BUDGET = 1_000_000
 TARGET_DESCRIPTOR_COUNTS = (3, 4, 5, 6)
+
+
+def _insert_until_target(
+    store: BidirectionalRetirementDescriptorPrimaryStore,
+    *,
+    index: int,
+    target: int,
+    cap: int = 65536,
+) -> int:
+    # Track queue growth from bounded foreground traces instead of traversing the
+    # diagnostic queue snapshot after every insert. Snapshot traversal remains setup
+    # validation only and is excluded from the measured shrink work.
+    count = int(store.retirement_queue_snapshot()["queue_count"])
+    while count < target:
+        if index >= cap:
+            raise AssertionError(f"v0.39 scaling did not reach queue count {target}")
+        trace = store.insert(_next_key(index))
+        count += int(trace.retirement_descriptors_enqueued)
+        index += 1
+    if count != target:
+        raise AssertionError("v0.39 scaling overshot requested queue count")
+    snapshot = store.retirement_queue_snapshot()
+    if int(snapshot["queue_count"]) != target:
+        raise AssertionError("v0.39 scaling trace-derived queue count drifted")
+    return index
 
 
 def _reclaim_to_one(store: BidirectionalRetirementDescriptorPrimaryStore) -> None:
@@ -26,9 +51,7 @@ def _case(target_count: int) -> dict[str, Any]:
         store = BidirectionalRetirementDescriptorPrimaryStore(str(path))
         store.initialize(initial_capacity=32, max_load=0.50, migration_slot_budget=4096)
 
-        index = _insert_until_queue_count(
-            store, index=0, target=target_count, cap=65536
-        )
+        index = _insert_until_target(store, index=0, target=target_count)
         initial = store.retirement_queue_snapshot()
         expected_pages = list(range(0, 2 * target_count, 2))
         observed_pages = [int(row["descriptor_page"]) for row in initial["descriptors"]]
@@ -45,9 +68,7 @@ def _case(target_count: int) -> dict[str, Any]:
         if int(one_live["descriptor_free_count"]) != target_count - 1:
             raise AssertionError("v0.39 scaling initial free count drifted")
 
-        index = _insert_until_queue_count(
-            store, index=index, target=target_count, cap=65536
-        )
+        index = _insert_until_target(store, index=index, target=target_count)
         reused = store.retirement_queue_snapshot()
         expected_reuse = list(reversed(expected_pages))
         observed_reuse = [int(row["descriptor_page"]) for row in reused["descriptors"]]
