@@ -1,0 +1,20 @@
+name: v0.42 middle live-tail experiment
+
+on:
+  push:
+    branches:
+      - experiment/v0.42-middle-live-tail-evacuation
+  pull_request:
+
+jobs:
+  verify-v042-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest tests.test_middle_live_tail_evacuation -v
