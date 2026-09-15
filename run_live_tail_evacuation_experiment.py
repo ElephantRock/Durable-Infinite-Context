@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from simulator.live_tail_evacuation import run_live_tail_evacuation_experiment
+from simulator.bounded_live_tail_evacuation import run_live_tail_evacuation_experiment
 
 RESULTS_PATH = Path(__file__).resolve().parent / "live_tail_evacuation_results.json"
 DIAGNOSTIC_PATH = Path(__file__).resolve().parent / "live_tail_evacuation_diagnostic.json"
