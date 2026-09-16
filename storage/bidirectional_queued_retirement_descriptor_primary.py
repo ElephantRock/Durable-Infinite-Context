@@ -365,7 +365,6 @@ class BidirectionalQueuedRetirementDescriptorPrimaryStore(
                 predecessor_fsyncs += 1
                 if failpoint is not None:
                     failpoint("retirement_queued_head_predecessor_synced")
-                # descriptor_preads is direct maintenance validation, not a scan.
                 if int(descriptor_preads) != 2:
                     raise AssertionError("v0.44 queued head descriptor read count drifted")
             finally:
@@ -401,7 +400,14 @@ class BidirectionalQueuedRetirementDescriptorPrimaryStore(
         )
 
     def retirement_queue_snapshot(self, *, max_descriptors: int = 1024) -> dict[str, Any]:
-        row = super().retirement_queue_snapshot(max_descriptors=max_descriptors)
+        if max_descriptors <= 0:
+            raise ValueError("max_descriptors must be positive")
+        row = super().retirement_queue_snapshot()
+        if (
+            int(row["queue_count"]) > max_descriptors
+            or int(row["descriptor_free_count"]) > max_descriptors
+        ):
+            raise RuntimeError("diagnostic descriptor chain exceeds snapshot limit")
         fd = self._open()
         predecessor_fd = self._open_predecessors()
         try:
@@ -627,7 +633,7 @@ class BidirectionalQueuedRetirementDescriptorPrimaryStore(
                 or meta.get("retirement_queue_tail_incarnation") != successor_incarnation
             ):
                 raise RuntimeError("v0.44 bounded target requires physical-tail successor as logical tail")
-            successor, successor_slot, reads = TaggedDescriptorIO.read(
+            successor, _successor_slot, reads = TaggedDescriptorIO.read(
                 arena_fd,
                 int(successor_page),
                 committed_epoch,
