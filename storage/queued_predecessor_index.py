@@ -79,6 +79,13 @@ class QueuedPredecessorIO:
         return (int(base_page) + int(copy_slot)) * PAGE_SIZE
 
     @classmethod
+    def _ensure_pair_length(cls, fd: int, base_page: int) -> None:
+        required = cls.offset(base_page, 1) + PAGE_SIZE
+        current = os.fstat(fd).st_size
+        if current < required:
+            os.ftruncate(fd, required)
+
+    @classmethod
     def read(
         cls,
         fd: int,
@@ -122,6 +129,7 @@ class QueuedPredecessorIO:
         prev_page: int | None,
         prev_incarnation: int | None,
     ) -> int:
+        cls._ensure_pair_length(fd, base_page)
         os.pwrite(
             fd,
             encode_queued_predecessor(
@@ -146,6 +154,7 @@ class QueuedPredecessorIO:
         prev_page: int | None,
         prev_incarnation: int | None,
     ) -> int:
+        cls._ensure_pair_length(fd, base_page)
         target_slot = 1 - int(committed_slot)
         os.pwrite(
             fd,
