@@ -6,11 +6,17 @@ on:
       - experiment/v0.45-multi-free-bidirectional-queued
   pull_request:
 
+concurrency:
+  group: v045-experiment-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-v045-candidate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
