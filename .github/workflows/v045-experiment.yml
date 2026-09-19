@@ -1,0 +1,20 @@
+name: v0.45 multiple-FREE bidirectional QUEUED experiment
+
+on:
+  push:
+    branches:
+      - experiment/v0.45-multi-free-bidirectional-queued
+  pull_request:
+
+jobs:
+  verify-v045-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest tests.test_multi_free_bidirectional_queued_retirement_descriptor -v
