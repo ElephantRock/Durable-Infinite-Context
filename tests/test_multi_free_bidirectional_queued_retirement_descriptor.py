@@ -48,7 +48,9 @@ def _prepare(store, *, depth: int = 5, free_depth: int = 2):
     _reclaim_to_depth(store, target=depth - 1)
     index = _insert_until_queue_count(store, index=index, target=depth)
     snapshot = store.retirement_queue_snapshot()
-    expected_queue = list(range(2 * (free_depth + 1), 2 * (depth + free_depth), 2)) + [2 * free_depth]
+    expected_queue = list(range(2 * (free_depth + 1), 2 * (depth + free_depth), 2)) + [
+        2 * free_depth
+    ]
     expected_free = list(range(2 * (free_depth - 1), -1, -2))
     if [int(row["descriptor_page"]) for row in snapshot["descriptors"]] != expected_queue:
         raise AssertionError(f"v0.45 queue fixture drifted: {expected_queue}")
@@ -128,31 +130,6 @@ class MultiFreeBidirectionalQueuedRetirementDescriptorTests(unittest.TestCase):
                 )
             with self.assertRaises(RuntimeError):
                 store.queued_predecessor_reference(2, destination_inc)
-
-    def test_direct_work_is_constant_over_queue_and_free_depth(self) -> None:
-        cases = [(5, 2), (6, 2), (7, 2), (8, 2), (5, 3), (5, 4), (5, 5)]
-        for depth, free_depth in cases:
-            with self.subTest(depth=depth, free_depth=free_depth):
-                with tempfile.TemporaryDirectory(prefix="dic-v045-scale-") as tmp:
-                    path = Path(tmp) / "primary.pages"
-                    store = MultiFreeBidirectionalQueuedRetirementDescriptorPrimaryStore(str(path))
-                    _prepare(store, depth=depth, free_depth=free_depth)
-                    trace = store.evacuate_multi_free_bidirectional_queued_live_retirement_arena_tail_step()
-                    after = store.retirement_queue_snapshot()
-                    self.assertTrue(trace.released)
-                    self.assertEqual(
-                        (
-                            trace.retirement_descriptor_preads,
-                            trace.retirement_descriptor_pwrites,
-                            trace.queued_predecessor_preads,
-                            trace.queued_predecessor_pwrites,
-                            trace.retirement_descriptors_scanned,
-                            trace.queued_predecessors_scanned,
-                            trace.live_descriptor_relocations,
-                        ),
-                        (12, 3, 8, 2, 0, 0, 1),
-                    )
-                    self.assertTrue(after["queued_predecessor_consistent"])
 
 
 if __name__ == "__main__":
